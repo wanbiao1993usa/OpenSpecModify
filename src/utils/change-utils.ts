@@ -1,7 +1,12 @@
 import path from 'path';
+import * as fs from 'node:fs';
+import fg from 'fast-glob';
 import { FileSystemUtils } from './file-system.js';
-import { writeChangeMetadata, validateSchemaName } from './change-metadata.js';
+import { writeChangeMetadata, validateSchemaName, resolveSchemaForChange } from './change-metadata.js';
 import { readProjectConfig } from '../core/project-config.js';
+import { ArtifactGraph } from '../core/artifact-graph/graph.js';
+import { detectCompleted } from '../core/artifact-graph/state.js';
+import { resolveSchema } from '../core/artifact-graph/resolver.js';
 
 const DEFAULT_SCHEMA = 'spec-driven';
 
@@ -11,6 +16,10 @@ const DEFAULT_SCHEMA = 'spec-driven';
 export interface CreateChangeOptions {
   /** The workflow schema to use (default: 'spec-driven') */
   schema?: string;
+  /** Source change name to copy completed artifacts from */
+  from?: string;
+  /** Parent change name for lineage tracking */
+  parent?: string;
 }
 
 /**
@@ -146,15 +155,109 @@ export async function createChange(
     throw new Error(`Change '${name}' already exists at ${changeDir}`);
   }
 
+  // Validate --from source change exists
+  if (options.from) {
+    const fromDir = path.join(projectRoot, 'openspec', 'changes', options.from);
+    if (!fs.existsSync(fromDir) || !fs.statSync(fromDir).isDirectory()) {
+      throw new Error(`Source change '${options.from}' not found at ${fromDir}`);
+    }
+  }
+
+  // Validate --parent change exists
+  if (options.parent) {
+    const parentDir = path.join(projectRoot, 'openspec', 'changes', options.parent);
+    if (!fs.existsSync(parentDir) || !fs.statSync(parentDir).isDirectory()) {
+      throw new Error(`Parent change '${options.parent}' not found at ${parentDir}`);
+    }
+  }
+
   // Create the directory (including parent directories if needed)
   await FileSystemUtils.createDirectory(changeDir);
 
-  // Write metadata file with schema and creation date
-  const today = new Date().toISOString().split('T')[0];
+  // Write metadata file with schema, creation timestamp, and lineage
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, '');
   writeChangeMetadata(changeDir, {
     schema: schemaName,
-    created: today,
+    created: now,
+    parent: options.parent,
+    from: options.from,
   }, projectRoot);
 
+  // Copy completed artifacts from source change if --from is specified
+  if (options.from) {
+    const fromDir = path.join(projectRoot, 'openspec', 'changes', options.from);
+    await copyCompletedArtifacts(fromDir, changeDir, schemaName, projectRoot);
+  }
+
   return { schema: schemaName };
+}
+
+/**
+ * Copies completed artifact output files from a source change to a destination change.
+ * Only copies artifacts that exist in the destination's schema (matched by artifact ID).
+ *
+ * @param srcChangeDir - Source change directory
+ * @param destChangeDir - Destination change directory
+ * @param destSchemaName - Schema name for the destination change
+ * @param projectRoot - Project root directory
+ * @returns Number of artifacts copied
+ */
+export async function copyCompletedArtifacts(
+  srcChangeDir: string,
+  destChangeDir: string,
+  destSchemaName: string,
+  projectRoot: string
+): Promise<number> {
+  // Resolve the source change's schema
+  const srcSchemaName = resolveSchemaForChange(srcChangeDir);
+  const srcSchema = resolveSchema(srcSchemaName, projectRoot);
+  const srcGraph = ArtifactGraph.fromSchema(srcSchema);
+  const srcCompleted = detectCompleted(srcGraph, srcChangeDir);
+
+  // Resolve the destination schema
+  const destSchema = resolveSchema(destSchemaName, projectRoot);
+  const destArtifactIds = new Set(destSchema.artifacts.map(a => a.id));
+
+  // Find artifacts that are completed in source AND exist in destination schema
+  let copiedCount = 0;
+
+  for (const artifact of srcGraph.getAllArtifacts()) {
+    if (!srcCompleted.has(artifact.id)) continue;
+    if (!destArtifactIds.has(artifact.id)) continue;
+
+    const generates = artifact.generates;
+
+    if (isGlobPatternUtil(generates)) {
+      // Handle glob patterns - copy all matching files
+      const fullPattern = path.join(srcChangeDir, generates);
+      const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+      const matches = fg.sync(normalizedPattern, { onlyFiles: true });
+
+      for (const srcFile of matches) {
+        const relativePath = path.relative(srcChangeDir, srcFile);
+        const destFile = path.join(destChangeDir, relativePath);
+        await FileSystemUtils.createDirectory(path.dirname(destFile));
+        fs.copyFileSync(srcFile, destFile);
+      }
+      if (matches.length > 0) copiedCount++;
+    } else {
+      // Simple file path
+      const srcFile = path.join(srcChangeDir, generates);
+      if (fs.existsSync(srcFile)) {
+        const destFile = path.join(destChangeDir, generates);
+        await FileSystemUtils.createDirectory(path.dirname(destFile));
+        fs.copyFileSync(srcFile, destFile);
+        copiedCount++;
+      }
+    }
+  }
+
+  return copiedCount;
+}
+
+/**
+ * Checks if a pattern is a glob pattern.
+ */
+function isGlobPatternUtil(pattern: string): boolean {
+  return pattern.includes('*') || pattern.includes('?') || pattern.includes('[');
 }

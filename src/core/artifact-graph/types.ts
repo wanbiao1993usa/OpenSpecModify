@@ -42,13 +42,19 @@ export const ChangeMetadataSchema = z.object({
   // Required: which workflow schema this change uses
   schema: z.string().min(1, { message: 'schema is required' }),
 
-  // Optional: creation timestamp (ISO date string)
+  // Optional: creation timestamp (ISO date string or ISO datetime string)
   created: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, {
-      message: 'created must be YYYY-MM-DD format',
+    .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/, {
+      message: 'created must be YYYY-MM-DD or ISO datetime format',
     })
     .optional(),
+
+  // Optional: parent change name (for lineage tracking)
+  parent: z.string().optional(),
+
+  // Optional: source change name (for --from artifact reuse)
+  from: z.string().optional(),
 });
 
 export type ChangeMetadata = z.infer<typeof ChangeMetadataSchema>;
@@ -57,6 +63,9 @@ export type ChangeMetadata = z.infer<typeof ChangeMetadataSchema>;
 
 // Slice 1: Simple completion tracking via filesystem
 export type CompletedSet = Set<string>;
+
+// Set of stale artifact IDs
+export type StaleSet = Set<string>;
 
 // Return type for blocked query
 export interface BlockedArtifacts {

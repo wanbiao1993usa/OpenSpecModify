@@ -19,4 +19,13 @@ export type { SchemasOptions } from './schemas.js';
 export { newChangeCommand } from './new-change.js';
 export type { NewChangeOptions } from './new-change.js';
 
+export { lineageCommand } from './lineage.js';
+export type { LineageOptions } from './lineage.js';
+
+export { resetCommand } from './reset.js';
+export type { ResetOptions } from './reset.js';
+
+export { artifactCompleteCommand, artifactMetaCommand } from './artifact-meta.js';
+export type { ArtifactCompleteOptions, ArtifactMetaOptions } from './artifact-meta.js';
+
 export { DEFAULT_SCHEMA } from './shared.js';

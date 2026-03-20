@@ -146,6 +146,43 @@ export class ArtifactGraph {
   }
 
   /**
+   * Gets all direct and transitive dependants (downstream) of a given artifact.
+   * Uses BFS to find all artifacts that directly or indirectly depend on the given artifact.
+   *
+   * @param id - The artifact ID to find dependants for
+   * @returns Array of artifact IDs that depend on the given artifact (sorted for determinism)
+   */
+  getDependants(id: string): string[] {
+    // Build reverse adjacency: artifact -> list of artifacts that depend on it
+    const dependants = new Map<string, string[]>();
+    for (const artifact of this.artifacts.values()) {
+      dependants.set(artifact.id, []);
+    }
+    for (const artifact of this.artifacts.values()) {
+      for (const req of artifact.requires) {
+        dependants.get(req)?.push(artifact.id);
+      }
+    }
+
+    // BFS from the given artifact
+    const visited = new Set<string>();
+    const queue = [id];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = dependants.get(current) ?? [];
+      for (const child of children) {
+        if (!visited.has(child)) {
+          visited.add(child);
+          queue.push(child);
+        }
+      }
+    }
+
+    return Array.from(visited).sort();
+  }
+
+  /**
    * Gets blocked artifacts and their unmet dependencies.
    */
   getBlocked(completed: CompletedSet): BlockedArtifacts {

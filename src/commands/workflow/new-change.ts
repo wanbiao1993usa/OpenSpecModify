@@ -16,6 +16,8 @@ import { validateSchemaExists } from './shared.js';
 export interface NewChangeOptions {
   description?: string;
   schema?: string;
+  from?: string;
+  parent?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -43,7 +45,11 @@ export async function newChangeCommand(name: string | undefined, options: NewCha
   const spinner = ora(`Creating change '${name}'${schemaDisplay}...`).start();
 
   try {
-    const result = await createChange(projectRoot, name, { schema: options.schema });
+    const result = await createChange(projectRoot, name, {
+      schema: options.schema,
+      from: options.from,
+      parent: options.parent,
+    });
 
     // If description provided, create README.md with description
     if (options.description) {
@@ -53,7 +59,11 @@ export async function newChangeCommand(name: string | undefined, options: NewCha
       await fs.writeFile(readmePath, `# ${name}\n\n${options.description}\n`, 'utf-8');
     }
 
-    spinner.succeed(`Created change '${name}' at openspec/changes/${name}/ (schema: ${result.schema})`);
+    let successMsg = `Created change '${name}' at openspec/changes/${name}/ (schema: ${result.schema})`;
+    if (options.from) {
+      successMsg += ` [copied artifacts from '${options.from}']`;
+    }
+    spinner.succeed(successMsg);
   } catch (error) {
     spinner.fail(`Failed to create change '${name}'`);
     throw error;

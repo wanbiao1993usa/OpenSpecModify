@@ -2,10 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getSchemaDir, resolveSchema } from './resolver.js';
 import { ArtifactGraph } from './graph.js';
-import { detectCompleted } from './state.js';
+import { detectCompleted, detectStale } from './state.js';
 import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
-import type { Artifact, CompletedSet } from './types.js';
+import type { Artifact, CompletedSet, StaleSet } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
 const shownWarnings = new Set<string>();
@@ -31,6 +31,8 @@ export interface ChangeContext {
   graph: ArtifactGraph;
   /** Set of completed artifact IDs */
   completed: CompletedSet;
+  /** Set of stale artifact IDs (completed but upstream has newer files) */
+  stale: StaleSet;
   /** Schema name being used */
   schemaName: string;
   /** Change name */
@@ -93,8 +95,8 @@ export interface ArtifactStatus {
   id: string;
   /** Output path pattern */
   outputPath: string;
-  /** Status: done, ready, or blocked */
-  status: 'done' | 'ready' | 'blocked';
+  /** Status: done, stale, ready, or blocked */
+  status: 'done' | 'stale' | 'ready' | 'blocked';
   /** Missing dependencies (only for blocked) */
   missingDeps?: string[];
 }
@@ -183,10 +185,12 @@ export function loadChangeContext(
   const schema = resolveSchema(resolvedSchemaName, projectRoot);
   const graph = ArtifactGraph.fromSchema(schema);
   const completed = detectCompleted(graph, changeDir);
+  const stale = detectStale(graph, completed, changeDir);
 
   return {
     graph,
     completed,
+    stale,
     schemaName: resolvedSchemaName,
     changeName,
     changeDir,
@@ -325,6 +329,14 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
 
   const artifactStatuses: ArtifactStatus[] = artifacts.map(artifact => {
     if (context.completed.has(artifact.id)) {
+      // Check if this completed artifact is stale
+      if (context.stale.has(artifact.id)) {
+        return {
+          id: artifact.id,
+          outputPath: artifact.generates,
+          status: 'stale' as const,
+        };
+      }
       return {
         id: artifact.id,
         outputPath: artifact.generates,

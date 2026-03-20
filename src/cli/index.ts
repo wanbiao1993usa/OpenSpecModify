@@ -30,6 +30,14 @@ import {
   type SchemasOptions,
   type NewChangeOptions,
 } from '../commands/workflow/index.js';
+import { lineageCommand, type LineageOptions } from '../commands/workflow/lineage.js';
+import { resetCommand, type ResetOptions } from '../commands/workflow/reset.js';
+import {
+  artifactCompleteCommand,
+  artifactMetaCommand,
+  type ArtifactCompleteOptions,
+  type ArtifactMetaOptions,
+} from '../commands/workflow/artifact-meta.js';
 import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
 const program = new Command();
@@ -174,14 +182,16 @@ program
   .description('List items (changes by default). Use --specs to list specs.')
   .option('--specs', 'List specs instead of changes')
   .option('--changes', 'List changes explicitly (default)')
-  .option('--sort <order>', 'Sort order: "recent" (default) or "name"', 'recent')
+  .option('--sort <order>', 'Sort order: "recent" (default), "name", or "created"', 'recent')
+  .option('--status <status>', 'Filter by status: "active", "complete", or "archived"')
   .option('--json', 'Output as JSON (for programmatic use)')
-  .action(async (options?: { specs?: boolean; changes?: boolean; sort?: string; json?: boolean }) => {
+  .action(async (options?: { specs?: boolean; changes?: boolean; sort?: string; status?: string; json?: boolean }) => {
     try {
       const listCommand = new ListCommand();
       const mode: 'changes' | 'specs' = options?.specs ? 'specs' : 'changes';
-      const sort = options?.sort === 'name' ? 'name' : 'recent';
-      await listCommand.execute('.', mode, { sort, json: options?.json });
+      const sort = options?.sort === 'name' ? 'name' : options?.sort === 'created' ? 'created' : 'recent';
+      const status = options?.status as 'active' | 'complete' | 'archived' | undefined;
+      await listCommand.execute('.', mode, { sort, status, json: options?.json });
     } catch (error) {
       console.log(); // Empty line for spacing
       ora().fail(`Error: ${(error as Error).message}`);
@@ -227,6 +237,20 @@ changeCmd
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exitCode = 1;
+    }
+  });
+
+changeCmd
+  .command('lineage <change-name>')
+  .description('Show the iteration lineage of a change')
+  .option('--json', 'Output as JSON')
+  .action(async (changeName: string, options?: LineageOptions) => {
+    try {
+      await lineageCommand(changeName, options ?? {});
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
     }
   });
 
@@ -497,9 +521,65 @@ newCmd
   .description('Create a new change directory')
   .option('--description <text>', 'Description to add to README.md')
   .option('--schema <name>', `Workflow schema to use (default: ${DEFAULT_SCHEMA})`)
+  .option('--from <change>', 'Copy completed artifacts from an existing change')
+  .option('--parent <change>', 'Parent change for lineage tracking')
   .action(async (name: string, options: NewChangeOptions) => {
     try {
       await newChangeCommand(name, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Reset command
+program
+  .command('reset <artifact-id>')
+  .description('Reset an artifact by deleting its output files')
+  .option('--change <id>', 'Change name (required)')
+  .option('--cascade', 'Also reset all downstream (dependant) artifacts')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--schema <name>', 'Schema override')
+  .action(async (artifactId: string, options: ResetOptions) => {
+    try {
+      await resetCommand(artifactId, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Artifact command group
+const artifactCmd = program.command('artifact').description('Manage artifact metadata');
+
+artifactCmd
+  .command('complete <artifact-id>')
+  .description('Record completion metadata for an artifact')
+  .option('--change <id>', 'Change name (required)')
+  .option('--duration <seconds>', 'Duration in seconds')
+  .option('--summary <text>', 'Summary of what was accomplished')
+  .option('--schema <name>', 'Schema override')
+  .action(async (artifactId: string, options: ArtifactCompleteOptions) => {
+    try {
+      await artifactCompleteCommand(artifactId, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+artifactCmd
+  .command('meta')
+  .description('Display artifact metadata for a change')
+  .option('--change <id>', 'Change name (required)')
+  .option('--json', 'Output as JSON')
+  .option('--schema <name>', 'Schema override')
+  .action(async (options: ArtifactMetaOptions) => {
+    try {
+      await artifactMetaCommand(options);
     } catch (error) {
       console.log();
       ora().fail(`Error: ${(error as Error).message}`);

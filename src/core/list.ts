@@ -1,19 +1,23 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progress.js';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { MarkdownParser } from './parsers/markdown-parser.js';
+import { readChangeMetadata } from '../utils/change-metadata.js';
 
 interface ChangeInfo {
   name: string;
   completedTasks: number;
   totalTasks: number;
   lastModified: Date;
+  created: string | undefined;
+  changeStatus: 'active' | 'complete' | 'no-tasks';
 }
 
 interface ListOptions {
-  sort?: 'recent' | 'name';
+  sort?: 'recent' | 'name' | 'created';
+  status?: 'active' | 'complete' | 'archived';
   json?: boolean;
 }
 
@@ -104,22 +108,91 @@ export class ListCommand {
       }
 
       // Collect information about each change
-      const changes: ChangeInfo[] = [];
+      let changes: ChangeInfo[] = [];
 
       for (const changeDir of changeDirs) {
         const progress = await getTaskProgressForChange(changesDir, changeDir);
         const changePath = path.join(changesDir, changeDir);
         const lastModified = await getLastModified(changePath);
+
+        // Read created timestamp from metadata
+        let created: string | undefined;
+        try {
+          const metadata = readChangeMetadata(changePath, targetPath);
+          created = metadata?.created;
+        } catch {
+          // Ignore metadata read errors
+        }
+
+        const changeStatus: 'active' | 'complete' | 'no-tasks' =
+          progress.total === 0 ? 'no-tasks' :
+          progress.completed === progress.total ? 'complete' : 'active';
+
         changes.push({
           name: changeDir,
           completedTasks: progress.completed,
           totalTasks: progress.total,
-          lastModified
+          lastModified,
+          created,
+          changeStatus,
         });
       }
 
+      // Filter by status if specified
+      if (options.status) {
+        if (options.status === 'archived') {
+          // Show archived changes instead
+          const archiveDir = path.join(targetPath, 'openspec', 'changes', 'archive');
+          if (existsSync(archiveDir)) {
+            const archiveEntries = await fs.readdir(archiveDir, { withFileTypes: true });
+            const archivedNames = archiveEntries
+              .filter(entry => entry.isDirectory())
+              .map(entry => entry.name);
+            if (archivedNames.length === 0) {
+              if (json) {
+                console.log(JSON.stringify({ changes: [] }));
+              } else {
+                console.log('No archived changes found.');
+              }
+              return;
+            }
+            if (json) {
+              console.log(JSON.stringify({ changes: archivedNames.map(n => ({ name: n, status: 'archived' })) }, null, 2));
+            } else {
+              console.log('Archived Changes:');
+              for (const name of archivedNames.sort()) {
+                console.log(`  ${name}     archived`);
+              }
+            }
+            return;
+          } else {
+            if (json) {
+              console.log(JSON.stringify({ changes: [] }));
+            } else {
+              console.log('No archived changes found.');
+            }
+            return;
+          }
+        }
+        changes = changes.filter(c => c.changeStatus === options.status);
+        if (changes.length === 0) {
+          if (json) {
+            console.log(JSON.stringify({ changes: [] }));
+          } else {
+            console.log(`No ${options.status} changes found.`);
+          }
+          return;
+        }
+      }
+
       // Sort by preference (default: recent first)
-      if (sort === 'recent') {
+      if (sort === 'created') {
+        changes.sort((a, b) => {
+          const aTime = a.created ?? '';
+          const bTime = b.created ?? '';
+          return bTime.localeCompare(aTime); // newest first
+        });
+      } else if (sort === 'recent') {
         changes.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
       } else {
         changes.sort((a, b) => a.name.localeCompare(b.name));
@@ -132,7 +205,8 @@ export class ListCommand {
           completedTasks: c.completedTasks,
           totalTasks: c.totalTasks,
           lastModified: c.lastModified.toISOString(),
-          status: c.totalTasks === 0 ? 'no-tasks' : c.completedTasks === c.totalTasks ? 'complete' : 'in-progress'
+          created: c.created,
+          status: c.changeStatus === 'no-tasks' ? 'no-tasks' : c.changeStatus === 'complete' ? 'complete' : 'in-progress',
         }));
         console.log(JSON.stringify({ changes: jsonOutput }, null, 2));
         return;
@@ -144,9 +218,13 @@ export class ListCommand {
       const nameWidth = Math.max(...changes.map(c => c.name.length));
       for (const change of changes) {
         const paddedName = change.name.padEnd(nameWidth);
-        const status = formatTaskStatus({ total: change.totalTasks, completed: change.completedTasks });
-        const timeAgo = formatRelativeTime(change.lastModified);
-        console.log(`${padding}${paddedName}     ${status.padEnd(12)}  ${timeAgo}`);
+        const created = change.created ? change.created.substring(0, 16).padEnd(18) : ''.padEnd(18);
+        const statusLabel = change.changeStatus === 'complete' ? 'complete' :
+                            change.changeStatus === 'active' ? 'active' : '';
+        const taskInfo = change.totalTasks > 0
+          ? `${change.completedTasks}/${change.totalTasks} artifacts done`
+          : '';
+        console.log(`${padding}${paddedName}  ${created}${statusLabel.padEnd(10)}  ${taskInfo}`);
       }
       return;
     }

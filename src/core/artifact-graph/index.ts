@@ -5,6 +5,7 @@ export {
   type Artifact,
   type SchemaYaml,
   type CompletedSet,
+  type StaleSet,
   type BlockedArtifacts,
 } from './types.js';
 
@@ -15,7 +16,7 @@ export { loadSchema, parseSchema, SchemaValidationError } from './schema.js';
 export { ArtifactGraph } from './graph.js';
 
 // State detection
-export { detectCompleted } from './state.js';
+export { detectCompleted, detectStale, getArtifactMtime } from './state.js';
 
 // Schema resolution
 export {

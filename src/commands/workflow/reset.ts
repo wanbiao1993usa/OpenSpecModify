@@ -12,6 +12,8 @@ import fg from 'fast-glob';
 import { loadChangeContext } from '../../core/artifact-graph/index.js';
 import { validateChangeExists } from './shared.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
+import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
+import * as yaml from 'yaml';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -133,6 +135,20 @@ export async function resetCommand(artifactId: string | undefined, options: Rese
     } catch (err) {
       spinner.warn(`Failed to delete ${file}: ${(err as Error).message}`);
     }
+  }
+
+  // Clean up artifact metadata for reset artifacts
+  const metaFile = readArtifactMetadata(context.changeDir);
+  let metaChanged = false;
+  for (const aid of artifactsToReset) {
+    if (metaFile.artifacts[aid]) {
+      delete metaFile.artifacts[aid];
+      metaChanged = true;
+    }
+  }
+  if (metaChanged) {
+    const metaPath = path.join(context.changeDir, '.artifact-meta.yaml');
+    fs.writeFileSync(metaPath, yaml.stringify(metaFile), 'utf-8');
   }
 
   spinner.succeed(`Reset ${artifactsToReset.length} artifact(s), deleted ${deletedCount} file(s).`);

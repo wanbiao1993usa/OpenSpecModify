@@ -57,13 +57,15 @@ export function isColorDisabled(): boolean {
 /**
  * Gets the color function based on status.
  */
-export function getStatusColor(status: 'done' | 'stale' | 'ready' | 'blocked'): (text: string) => string {
+export function getStatusColor(status: 'done' | 'unverified' | 'stale' | 'ready' | 'blocked'): (text: string) => string {
   if (isColorDisabled()) {
     return (text: string) => text;
   }
   switch (status) {
     case 'done':
       return chalk.green;
+    case 'unverified':
+      return chalk.cyan;
     case 'stale':
       return chalk.magenta;
     case 'ready':
@@ -76,11 +78,13 @@ export function getStatusColor(status: 'done' | 'stale' | 'ready' | 'blocked'): 
 /**
  * Gets the status indicator for an artifact.
  */
-export function getStatusIndicator(status: 'done' | 'stale' | 'ready' | 'blocked'): string {
+export function getStatusIndicator(status: 'done' | 'unverified' | 'stale' | 'ready' | 'blocked'): string {
   const color = getStatusColor(status);
   switch (status) {
     case 'done':
       return color('[x]');
+    case 'unverified':
+      return color('[?]');
     case 'stale':
       return color('[~]');
     case 'ready':

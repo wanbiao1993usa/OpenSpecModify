@@ -7,6 +7,7 @@ import { readProjectConfig } from '../core/project-config.js';
 import { ArtifactGraph } from '../core/artifact-graph/graph.js';
 import { detectCompleted } from '../core/artifact-graph/state.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
+import { readArtifactMetadata, writeArtifactMeta } from './artifact-metadata.js';
 
 const DEFAULT_SCHEMA = 'spec-driven';
 
@@ -218,6 +219,9 @@ export async function copyCompletedArtifacts(
   const destSchema = resolveSchema(destSchemaName, projectRoot);
   const destArtifactIds = new Set(destSchema.artifacts.map(a => a.id));
 
+  // Read source artifact metadata
+  const srcMeta = readArtifactMetadata(srcChangeDir);
+
   // Find artifacts that are completed in source AND exist in destination schema
   let copiedCount = 0;
 
@@ -226,33 +230,64 @@ export async function copyCompletedArtifacts(
     if (!destArtifactIds.has(artifact.id)) continue;
 
     const generates = artifact.generates;
+    let filesCopied = false;
 
     if (isGlobPatternUtil(generates)) {
-      // Handle glob patterns - copy all matching files
+      // Handle glob patterns - copy all matching files and directories
       const fullPattern = path.join(srcChangeDir, generates);
       const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
-      const matches = fg.sync(normalizedPattern, { onlyFiles: true });
+      const matches = fg.sync(normalizedPattern, { onlyFiles: false });
 
       for (const srcFile of matches) {
         const relativePath = path.relative(srcChangeDir, srcFile);
         const destFile = path.join(destChangeDir, relativePath);
-        await FileSystemUtils.createDirectory(path.dirname(destFile));
-        fs.copyFileSync(srcFile, destFile);
+        await copyFileOrDir(srcFile, destFile);
       }
-      if (matches.length > 0) copiedCount++;
+      if (matches.length > 0) filesCopied = true;
     } else {
-      // Simple file path
+      // Simple file or directory path
       const srcFile = path.join(srcChangeDir, generates);
       if (fs.existsSync(srcFile)) {
         const destFile = path.join(destChangeDir, generates);
-        await FileSystemUtils.createDirectory(path.dirname(destFile));
-        fs.copyFileSync(srcFile, destFile);
-        copiedCount++;
+        await copyFileOrDir(srcFile, destFile);
+        filesCopied = true;
+      }
+    }
+
+    // Copy artifact metadata alongside the files
+    if (filesCopied) {
+      copiedCount++;
+      const existingMeta = srcMeta.artifacts[artifact.id];
+      if (existingMeta) {
+        // Source has metadata — copy it as-is
+        writeArtifactMeta(destChangeDir, artifact.id, existingMeta);
+      } else {
+        // Source lacks .artifact-meta.yaml (old version) — generate default entry
+        const srcChangeName = path.basename(srcChangeDir);
+        writeArtifactMeta(destChangeDir, artifact.id, {
+          completed_at: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
+          summary: `从 ${srcChangeName} 复制`,
+        });
       }
     }
   }
 
   return copiedCount;
+}
+
+/**
+ * Copies a file or directory recursively from src to dest.
+ * Handles both regular files and directories (e.g., partitioned Parquet datasets).
+ */
+async function copyFileOrDir(src: string, dest: string): Promise<void> {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    // Recursive directory copy
+    fs.cpSync(src, dest, { recursive: true });
+  } else {
+    await FileSystemUtils.createDirectory(path.dirname(dest));
+    fs.copyFileSync(src, dest);
+  }
 }
 
 /**

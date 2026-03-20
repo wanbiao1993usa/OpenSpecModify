@@ -5,6 +5,7 @@ import { ArtifactGraph } from './graph.js';
 import { detectCompleted, detectStale } from './state.js';
 import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
+import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
 import type { Artifact, CompletedSet, StaleSet } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
@@ -95,8 +96,8 @@ export interface ArtifactStatus {
   id: string;
   /** Output path pattern */
   outputPath: string;
-  /** Status: done, stale, ready, or blocked */
-  status: 'done' | 'stale' | 'ready' | 'blocked';
+  /** Status: done, unverified, stale, ready, or blocked */
+  status: 'done' | 'unverified' | 'stale' | 'ready' | 'blocked';
   /** Missing dependencies (only for blocked) */
   missingDeps?: string[];
 }
@@ -327,9 +328,24 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
   const ready = new Set(context.graph.getNextArtifacts(context.completed));
   const blocked = context.graph.getBlocked(context.completed);
 
+  // Read artifact metadata to distinguish done vs unverified
+  const artifactMeta = readArtifactMetadata(context.changeDir);
+
   const artifactStatuses: ArtifactStatus[] = artifacts.map(artifact => {
     if (context.completed.has(artifact.id)) {
-      // Check if this completed artifact is stale
+      // File exists — check if it has artifact complete metadata
+      const hasMeta = !!artifactMeta.artifacts[artifact.id];
+
+      if (!hasMeta) {
+        // File exists but no metadata → unverified
+        return {
+          id: artifact.id,
+          outputPath: artifact.generates,
+          status: 'unverified' as const,
+        };
+      }
+
+      // Has metadata — check if stale
       if (context.stale.has(artifact.id)) {
         return {
           id: artifact.id,

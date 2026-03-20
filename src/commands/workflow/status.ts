@@ -98,7 +98,9 @@ export function printStatusText(status: ChangeStatus): void {
     const color = getStatusColor(artifact.status);
     let line = `${indicator} ${artifact.id}`;
 
-    if (artifact.status === 'stale') {
+    if (artifact.status === 'unverified') {
+      line += color(` (unverified — no completion metadata)`);
+    } else if (artifact.status === 'stale') {
       line += color(` (stale — upstream changed)`);
     } else if (artifact.status === 'blocked' && artifact.missingDeps && artifact.missingDeps.length > 0) {
       line += color(` (blocked by: ${artifact.missingDeps.join(', ')})`);

@@ -7,6 +7,7 @@ import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
 import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
 import type { Artifact, CompletedSet, StaleSet } from './types.js';
+import { isLightArtifact } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
 const shownWarnings = new Set<string>();
@@ -46,6 +47,8 @@ export interface ChangeContext {
 
 /**
  * Enriched instructions for creating an artifact.
+ * For heavy-mode artifacts: includes instruction, template, outputPath, description.
+ * For light-mode artifacts: includes task and dependencies with output paths.
  */
 export interface ArtifactInstructions {
   /** Change name */
@@ -56,22 +59,24 @@ export interface ArtifactInstructions {
   schemaName: string;
   /** Full path to change directory */
   changeDir: string;
-  /** Output path pattern (e.g., "proposal.md") */
+  /** Output path pattern (e.g., "proposal.md") — heavy mode only */
   outputPath: string;
-  /** Artifact description */
+  /** Artifact description — heavy mode only */
   description: string;
-  /** Guidance on how to create this artifact (from schema instruction field) */
+  /** Guidance on how to create this artifact (from schema instruction field) — heavy mode only */
   instruction: string | undefined;
   /** Project context from config (constraints/background for AI, not to be included in output) */
   context: string | undefined;
   /** Artifact-specific rules from config (constraints for AI, not to be included in output) */
   rules: string[] | undefined;
-  /** Template content (structure to follow - this IS the output format) */
+  /** Template content (structure to follow) — heavy mode only */
   template: string;
   /** Dependencies with completion status and paths */
   dependencies: DependencyInfo[];
   /** Artifacts that become available after completing this one */
   unlocks: string[];
+  /** Task description — light mode only */
+  task?: string;
 }
 
 /**
@@ -82,10 +87,14 @@ export interface DependencyInfo {
   id: string;
   /** Whether the dependency is completed */
   done: boolean;
-  /** Relative output path of the dependency (e.g., "proposal.md") */
+  /** Relative output path of the dependency (e.g., "proposal.md") — heavy mode */
   path: string;
-  /** Description of the dependency artifact */
+  /** Description of the dependency artifact — heavy mode */
   description: string;
+  /** Output path for light-mode dependency (e.g., ".artifact-output/macro.txt") */
+  outputPath?: string;
+  /** Summary from .artifact-meta.yaml */
+  summary?: string;
 }
 
 /**
@@ -223,8 +232,6 @@ export function generateInstructions(
     throw new Error(`Artifact '${artifactId}' not found in schema '${context.schemaName}'`);
   }
 
-  const templateContent = loadTemplate(context.schemaName, artifact.template, context.projectRoot);
-  const dependencies = getDependencyInfo(artifact, context.graph, context.completed);
   const unlocks = getUnlockedArtifacts(context.graph, artifactId);
 
   // Use projectRoot from context if not explicitly provided
@@ -263,13 +270,37 @@ export function generateInstructions(
   const rulesForArtifact = projectConfig?.rules?.[artifactId];
   const configRules = rulesForArtifact && rulesForArtifact.length > 0 ? rulesForArtifact : undefined;
 
+  // Light-mode artifact: return task + dependencies with output paths
+  if (isLightArtifact(artifact)) {
+    const dependencies = getLightDependencyInfo(artifact, context.graph, context.completed, context.changeDir);
+    return {
+      changeName: context.changeName,
+      artifactId: artifact.id,
+      schemaName: context.schemaName,
+      changeDir: context.changeDir,
+      outputPath: `.artifact-output/${artifact.id}.txt`,
+      description: '',
+      instruction: undefined,
+      context: configContext,
+      rules: configRules,
+      template: '',
+      dependencies,
+      unlocks,
+      task: artifact.task,
+    };
+  }
+
+  // Heavy-mode artifact: existing behavior
+  const templateContent = loadTemplate(context.schemaName, artifact.template!, context.projectRoot);
+  const dependencies = getDependencyInfo(artifact, context.graph, context.completed);
+
   return {
     changeName: context.changeName,
     artifactId: artifact.id,
     schemaName: context.schemaName,
     changeDir: context.changeDir,
-    outputPath: artifact.generates,
-    description: artifact.description,
+    outputPath: artifact.generates!,
+    description: artifact.description || '',
     instruction: artifact.instruction,
     context: configContext,
     rules: configRules,
@@ -280,7 +311,7 @@ export function generateInstructions(
 }
 
 /**
- * Gets dependency info including paths and descriptions.
+ * Gets dependency info including paths and descriptions (heavy mode).
  */
 function getDependencyInfo(
   artifact: Artifact,
@@ -294,6 +325,41 @@ function getDependencyInfo(
       done: completed.has(id),
       path: depArtifact?.generates ?? id,
       description: depArtifact?.description ?? '',
+    };
+  });
+}
+
+/**
+ * Gets dependency info for light-mode artifacts.
+ * Returns outputPath (relative to changeDir) and summary from metadata.
+ */
+function getLightDependencyInfo(
+  artifact: Artifact,
+  graph: ArtifactGraph,
+  completed: CompletedSet,
+  changeDir: string
+): DependencyInfo[] {
+  const artifactMeta = readArtifactMetadata(changeDir);
+
+  return artifact.requires.map(id => {
+    const depArtifact = graph.getArtifact(id);
+    const meta = artifactMeta.artifacts[id];
+
+    // Determine the output path based on whether dep is light or heavy
+    let outputPath: string;
+    if (depArtifact && isLightArtifact(depArtifact)) {
+      outputPath = `.artifact-output/${id}.txt`;
+    } else {
+      outputPath = depArtifact?.generates ?? id;
+    }
+
+    return {
+      id,
+      done: completed.has(id),
+      path: outputPath,
+      description: depArtifact?.description ?? '',
+      outputPath,
+      summary: meta?.summary,
     };
   });
 }
@@ -332,15 +398,19 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
   const artifactMeta = readArtifactMetadata(context.changeDir);
 
   const artifactStatuses: ArtifactStatus[] = artifacts.map(artifact => {
+    const outputPath = isLightArtifact(artifact)
+      ? `.artifact-output/${artifact.id}.txt`
+      : artifact.generates!;
+
     if (context.completed.has(artifact.id)) {
-      // File exists — check if it has artifact complete metadata
+      // Check if it has artifact complete metadata
       const hasMeta = !!artifactMeta.artifacts[artifact.id];
 
       if (!hasMeta) {
-        // File exists but no metadata → unverified
+        // File/output exists but no metadata → unverified
         return {
           id: artifact.id,
-          outputPath: artifact.generates,
+          outputPath,
           status: 'unverified' as const,
         };
       }
@@ -349,13 +419,13 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
       if (context.stale.has(artifact.id)) {
         return {
           id: artifact.id,
-          outputPath: artifact.generates,
+          outputPath,
           status: 'stale' as const,
         };
       }
       return {
         id: artifact.id,
-        outputPath: artifact.generates,
+        outputPath,
         status: 'done' as const,
       };
     }
@@ -363,14 +433,14 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
     if (ready.has(artifact.id)) {
       return {
         id: artifact.id,
-        outputPath: artifact.generates,
+        outputPath,
         status: 'ready' as const,
       };
     }
 
     return {
       id: artifact.id,
-      outputPath: artifact.generates,
+      outputPath,
       status: 'blocked' as const,
       missingDeps: blocked[artifact.id] ?? [],
     };

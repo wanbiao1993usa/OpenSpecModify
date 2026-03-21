@@ -561,6 +561,7 @@ artifactCmd
   .option('--duration <seconds>', 'Duration in seconds')
   .option('--summary <text>', 'Summary of what was accomplished')
   .option('--schema <name>', 'Schema override')
+  .option('--output-file <path>', 'Path to file containing full artifact output (stored in .artifact-output/)')
   .action(async (artifactId: string, options: ArtifactCompleteOptions) => {
     try {
       await artifactCompleteCommand(artifactId, options);

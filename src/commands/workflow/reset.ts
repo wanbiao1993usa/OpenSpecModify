@@ -10,6 +10,7 @@ import path from 'path';
 import * as fs from 'fs';
 import fg from 'fast-glob';
 import { loadChangeContext } from '../../core/artifact-graph/index.js';
+import { isLightArtifact } from '../../core/artifact-graph/types.js';
 import { validateChangeExists } from './shared.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
 import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
@@ -66,23 +67,33 @@ export async function resetCommand(artifactId: string | undefined, options: Rese
     const a = context.graph.getArtifact(aid);
     if (!a) continue;
 
-    const generates = a.generates;
     const files: string[] = [];
 
-    if (isGlobPattern(generates)) {
-      const fullPattern = path.join(context.changeDir, generates);
-      const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
-      const matches = fg.sync(normalizedPattern, { onlyFiles: true });
-      for (const match of matches) {
-        const rel = path.relative(context.changeDir, match);
-        if (!PROTECTED_FILES.has(rel)) {
-          files.push(match);
-        }
+    if (isLightArtifact(a)) {
+      // Light mode: delete .artifact-output/<artifact-id>.txt
+      const outputPath = path.join(context.changeDir, '.artifact-output', `${aid}.txt`);
+      if (fs.existsSync(outputPath)) {
+        files.push(outputPath);
       }
     } else {
-      const fullPath = path.join(context.changeDir, generates);
-      if (fs.existsSync(fullPath) && !PROTECTED_FILES.has(generates)) {
-        files.push(fullPath);
+      // Heavy mode: existing behavior
+      const generates = a.generates!;
+
+      if (isGlobPattern(generates)) {
+        const fullPattern = path.join(context.changeDir, generates);
+        const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+        const matches = fg.sync(normalizedPattern, { onlyFiles: true });
+        for (const match of matches) {
+          const rel = path.relative(context.changeDir, match);
+          if (!PROTECTED_FILES.has(rel)) {
+            files.push(match);
+          }
+        }
+      } else {
+        const fullPath = path.join(context.changeDir, generates);
+        if (fs.existsSync(fullPath) && !PROTECTED_FILES.has(generates)) {
+          files.push(fullPath);
+        }
       }
     }
 

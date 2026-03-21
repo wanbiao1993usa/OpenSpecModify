@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import { parse as parseYaml } from 'yaml';
-import { SchemaYamlSchema, type SchemaYaml, type Artifact } from './types.js';
+import { SchemaYamlSchema, type SchemaYaml, type Artifact, isLightArtifact, isHeavyArtifact } from './types.js';
 
 export class SchemaValidationError extends Error {
   constructor(message: string) {
@@ -32,6 +32,9 @@ export function parseSchema(yamlContent: string): SchemaYaml {
 
   const schema = result.data;
 
+  // Validate artifact mode (light vs heavy) for each artifact
+  validateArtifactModes(schema.artifacts);
+
   // Check for duplicate artifact IDs
   validateNoDuplicateIds(schema.artifacts);
 
@@ -42,6 +45,59 @@ export function parseSchema(yamlContent: string): SchemaYaml {
   validateNoCycles(schema.artifacts);
 
   return schema;
+}
+
+/**
+ * Validates artifact mode consistency for each artifact.
+ * - Heavy mode: must have `instruction`/`template`/`generates`, must NOT have `task`
+ * - Light mode: must have `task`, must NOT have `instruction`/`template`/`generates`
+ * - Neither mode: error (missing both `task` and `instruction`/`template`)
+ */
+function validateArtifactModes(artifacts: Artifact[]): void {
+  for (const artifact of artifacts) {
+    const hasTask = !!artifact.task;
+    const hasInstruction = !!artifact.instruction;
+    const hasTemplate = !!artifact.template;
+    const hasGenerates = !!artifact.generates;
+
+    // Rule 1: Cannot have both task and instruction (mixing modes)
+    if (hasTask && hasInstruction) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}': cannot have both 'task' and 'instruction'. Use either light mode (task) or heavy mode (instruction + template + generates).`
+      );
+    }
+
+    // Rule 2: Cannot have task with template or generates
+    if (hasTask && (hasTemplate || hasGenerates)) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}': light mode artifact with 'task' cannot have 'template' or 'generates'.`
+      );
+    }
+
+    // Rule 3: Light mode — has task, OK
+    if (hasTask) {
+      continue;
+    }
+
+    // Rule 4: Heavy mode — must have template and generates
+    if (!hasTemplate && !hasGenerates) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}': must have either 'task' (light mode) or 'template' + 'generates' (heavy mode).`
+      );
+    }
+
+    if (!hasTemplate) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}': heavy mode artifact requires 'template' field.`
+      );
+    }
+
+    if (!hasGenerates) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}': heavy mode artifact requires 'generates' field.`
+      );
+    }
+  }
 }
 
 /**

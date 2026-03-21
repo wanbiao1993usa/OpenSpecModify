@@ -68,7 +68,7 @@ export async function templatesCommand(options: TemplatesOptions): Promise<void>
 
     const templates: TemplateInfo[] = graph.getAllArtifacts().map((artifact) => ({
       artifactId: artifact.id,
-      templatePath: path.join(schemaDir, 'templates', artifact.template),
+      templatePath: path.join(schemaDir, 'templates', artifact.template || ''),
       source,
     }));
 

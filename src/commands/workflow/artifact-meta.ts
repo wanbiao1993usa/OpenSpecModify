@@ -8,6 +8,7 @@
 import ora from 'ora';
 import chalk from 'chalk';
 import path from 'path';
+import * as fs from 'node:fs';
 import { validateChangeExists } from './shared.js';
 import {
   readArtifactMetadata,
@@ -25,6 +26,7 @@ export interface ArtifactCompleteOptions {
   duration?: string;
   summary?: string;
   schema?: string;
+  outputFile?: string;
 }
 
 export interface ArtifactMetaOptions {
@@ -74,6 +76,23 @@ export async function artifactCompleteCommand(
   }
 
   writeArtifactMeta(context.changeDir, artifactId, meta);
+
+  // Handle --output-file: copy file content to .artifact-output/<artifact-id>.txt
+  if (options.outputFile) {
+    const outputFilePath = options.outputFile;
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`Output file not found: ${outputFilePath}`);
+    }
+
+    const artifactOutputDir = path.join(context.changeDir, '.artifact-output');
+    if (!fs.existsSync(artifactOutputDir)) {
+      fs.mkdirSync(artifactOutputDir, { recursive: true });
+    }
+
+    const content = fs.readFileSync(outputFilePath);
+    const destPath = path.join(artifactOutputDir, `${artifactId}.txt`);
+    fs.writeFileSync(destPath, content);
+  }
 
   console.log(`Recorded metadata for artifact '${artifactId}' in change '${changeName}'.`);
 }

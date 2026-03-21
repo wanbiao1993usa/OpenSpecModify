@@ -8,6 +8,7 @@ import { ArtifactGraph } from '../core/artifact-graph/graph.js';
 import { detectCompleted } from '../core/artifact-graph/state.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
 import { readArtifactMetadata, writeArtifactMeta } from './artifact-metadata.js';
+import { isLightArtifact } from '../core/artifact-graph/types.js';
 
 const DEFAULT_SCHEMA = 'spec-driven';
 
@@ -229,46 +230,64 @@ export async function copyCompletedArtifacts(
     if (!srcCompleted.has(artifact.id)) continue;
     if (!destArtifactIds.has(artifact.id)) continue;
 
-    const generates = artifact.generates;
     let filesCopied = false;
 
-    if (isGlobPatternUtil(generates)) {
-      // Handle glob patterns - copy all matching files and directories
-      const fullPattern = path.join(srcChangeDir, generates);
-      const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
-      const matches = fg.sync(normalizedPattern, { onlyFiles: false });
-
-      for (const srcFile of matches) {
-        const relativePath = path.relative(srcChangeDir, srcFile);
-        const destFile = path.join(destChangeDir, relativePath);
-        await copyFileOrDir(srcFile, destFile);
-      }
-      if (matches.length > 0) filesCopied = true;
-    } else {
-      // Simple file or directory path
-      const srcFile = path.join(srcChangeDir, generates);
-      if (fs.existsSync(srcFile)) {
-        const destFile = path.join(destChangeDir, generates);
-        await copyFileOrDir(srcFile, destFile);
+    if (isLightArtifact(artifact)) {
+      // Light mode: copy .artifact-output/<artifact-id>.txt
+      const srcOutputFile = path.join(srcChangeDir, '.artifact-output', `${artifact.id}.txt`);
+      if (fs.existsSync(srcOutputFile)) {
+        const destOutputDir = path.join(destChangeDir, '.artifact-output');
+        if (!fs.existsSync(destOutputDir)) {
+          fs.mkdirSync(destOutputDir, { recursive: true });
+        }
+        const destOutputFile = path.join(destOutputDir, `${artifact.id}.txt`);
+        fs.copyFileSync(srcOutputFile, destOutputFile);
         filesCopied = true;
+      }
+    } else {
+      // Heavy mode: existing behavior
+      const generates = artifact.generates!;
+
+      if (isGlobPatternUtil(generates)) {
+        // Handle glob patterns - copy all matching files and directories
+        const fullPattern = path.join(srcChangeDir, generates);
+        const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+        const matches = fg.sync(normalizedPattern, { onlyFiles: false });
+
+        for (const srcFile of matches) {
+          const relativePath = path.relative(srcChangeDir, srcFile);
+          const destFile = path.join(destChangeDir, relativePath);
+          await copyFileOrDir(srcFile, destFile);
+        }
+        if (matches.length > 0) filesCopied = true;
+      } else {
+        // Simple file or directory path
+        const srcFile = path.join(srcChangeDir, generates);
+        if (fs.existsSync(srcFile)) {
+          const destFile = path.join(destChangeDir, generates);
+          await copyFileOrDir(srcFile, destFile);
+          filesCopied = true;
+        }
       }
     }
 
     // Copy artifact metadata alongside the files
+    const existingMeta = srcMeta.artifacts[artifact.id];
+    if (existingMeta) {
+      // Source has metadata — copy it (counts as copied even without output file for light mode)
+      writeArtifactMeta(destChangeDir, artifact.id, existingMeta);
+      if (!filesCopied) filesCopied = true;  // metadata alone counts for light mode
+    } else if (filesCopied) {
+      // Source lacks .artifact-meta.yaml (old version) — generate default entry
+      const srcChangeName = path.basename(srcChangeDir);
+      writeArtifactMeta(destChangeDir, artifact.id, {
+        completed_at: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
+        summary: `从 ${srcChangeName} 复制`,
+      });
+    }
+
     if (filesCopied) {
       copiedCount++;
-      const existingMeta = srcMeta.artifacts[artifact.id];
-      if (existingMeta) {
-        // Source has metadata — copy it as-is
-        writeArtifactMeta(destChangeDir, artifact.id, existingMeta);
-      } else {
-        // Source lacks .artifact-meta.yaml (old version) — generate default entry
-        const srcChangeName = path.basename(srcChangeDir);
-        writeArtifactMeta(destChangeDir, artifact.id, {
-          completed_at: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
-          summary: `从 ${srcChangeName} 复制`,
-        });
-      }
     }
   }
 

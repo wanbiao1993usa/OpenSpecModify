@@ -2,8 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import fg from 'fast-glob';
 import type { CompletedSet, StaleSet } from './types.js';
+import { isLightArtifact } from './types.js';
 import type { ArtifactGraph } from './graph.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
+import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
 
 /**
  * Detects which artifacts are completed by checking file existence in the change directory.
@@ -21,9 +23,25 @@ export function detectCompleted(graph: ArtifactGraph, changeDir: string): Comple
     return completed;
   }
 
+  // Read artifact metadata once for light-mode checks
+  const artifactMeta = readArtifactMetadata(changeDir);
+
   for (const artifact of graph.getAllArtifacts()) {
-    if (isArtifactComplete(artifact.generates, changeDir)) {
-      completed.add(artifact.id);
+    if (isLightArtifact(artifact)) {
+      // Light mode: check metadata first, then output file existence
+      if (artifactMeta.artifacts[artifact.id]) {
+        completed.add(artifact.id);
+      } else {
+        const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.txt`);
+        if (fs.existsSync(outputPath)) {
+          completed.add(artifact.id);
+        }
+      }
+    } else {
+      // Heavy mode: check generated file existence (existing behavior)
+      if (isArtifactComplete(artifact.generates!, changeDir)) {
+        completed.add(artifact.id);
+      }
     }
   }
 
@@ -104,6 +122,37 @@ export function getArtifactMtime(generates: string, changeDir: string): number |
  * @param changeDir - The change directory to scan for files
  * @returns Set of stale artifact IDs
  */
+/**
+ * Gets the completion timestamp for an artifact, handling both light and heavy modes.
+ * - Light mode: uses completedAt from .artifact-meta.yaml
+ * - Heavy mode: uses file mtime from generates output
+ * Returns milliseconds since epoch, or null if no timestamp available.
+ */
+function getArtifactTimestamp(
+  artifact: ReturnType<ArtifactGraph['getArtifact']>,
+  changeDir: string,
+  artifactMeta: ReturnType<typeof readArtifactMetadata>
+): number | null {
+  if (!artifact) return null;
+
+  if (isLightArtifact(artifact)) {
+    // Light mode: use completedAt from metadata
+    const meta = artifactMeta.artifacts[artifact.id];
+    if (meta?.completed_at) {
+      return new Date(meta.completed_at).getTime();
+    }
+    // Fallback: check output file mtime
+    const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.txt`);
+    if (fs.existsSync(outputPath)) {
+      return fs.statSync(outputPath).mtimeMs;
+    }
+    return null;
+  }
+
+  // Heavy mode: use file mtime
+  return getArtifactMtime(artifact.generates!, changeDir);
+}
+
 export function detectStale(
   graph: ArtifactGraph,
   completed: CompletedSet,
@@ -115,21 +164,20 @@ export function detectStale(
     return stale;
   }
 
-  // Cache mtimes to avoid redundant stat calls
-  const mtimeCache = new Map<string, number | null>();
+  // Read artifact metadata for light-mode timestamp comparisons
+  const artifactMeta = readArtifactMetadata(changeDir);
 
-  function getMtime(artifactId: string): number | null {
-    if (mtimeCache.has(artifactId)) {
-      return mtimeCache.get(artifactId)!;
+  // Cache timestamps to avoid redundant reads
+  const timestampCache = new Map<string, number | null>();
+
+  function getTimestamp(artifactId: string): number | null {
+    if (timestampCache.has(artifactId)) {
+      return timestampCache.get(artifactId)!;
     }
     const artifact = graph.getArtifact(artifactId);
-    if (!artifact) {
-      mtimeCache.set(artifactId, null);
-      return null;
-    }
-    const mtime = getArtifactMtime(artifact.generates, changeDir);
-    mtimeCache.set(artifactId, mtime);
-    return mtime;
+    const ts = getArtifactTimestamp(artifact, changeDir, artifactMeta);
+    timestampCache.set(artifactId, ts);
+    return ts;
   }
 
   // Process artifacts in build order to propagate staleness
@@ -141,8 +189,8 @@ export function detectStale(
     const artifact = graph.getArtifact(artifactId);
     if (!artifact || artifact.requires.length === 0) continue;
 
-    const currentMtime = getMtime(artifactId);
-    if (currentMtime === null) continue;
+    const currentTimestamp = getTimestamp(artifactId);
+    if (currentTimestamp === null) continue;
 
     for (const reqId of artifact.requires) {
       // If upstream is stale, downstream is also stale
@@ -151,10 +199,10 @@ export function detectStale(
         break;
       }
 
-      // If upstream file is newer than current artifact, it's stale
+      // If upstream timestamp is newer than current artifact, it's stale
       if (completed.has(reqId)) {
-        const upstreamMtime = getMtime(reqId);
-        if (upstreamMtime !== null && upstreamMtime > currentMtime) {
+        const upstreamTimestamp = getTimestamp(reqId);
+        if (upstreamTimestamp !== null && upstreamTimestamp > currentTimestamp) {
           stale.add(artifactId);
           break;
         }

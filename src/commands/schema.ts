@@ -12,6 +12,7 @@ import {
 } from '../core/artifact-graph/resolver.js';
 import { parseSchema, SchemaValidationError } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml, Artifact } from '../core/artifact-graph/types.js';
+import { isLightArtifact } from '../core/artifact-graph/types.js';
 
 /**
  * Schema source location type
@@ -195,15 +196,24 @@ function validateSchema(
     return { valid: false, issues };
   }
 
-  // Check template files exist
+  // Check template files exist (only for heavy-mode artifacts)
   // Templates can be in schemaDir directly or in a templates/ subdirectory
   if (verbose) {
     console.log('  Checking template files...');
   }
   for (const artifact of schema.artifacts) {
+    // Skip template check for light-mode artifacts (they have task, no template)
+    if (isLightArtifact(artifact)) {
+      if (verbose) {
+        console.log(`    Skipping template check for light-mode artifact '${artifact.id}'`);
+      }
+      continue;
+    }
+
+    // Heavy-mode artifact: template must exist
     // Try templates subdirectory first (standard location), then root
-    const templatePathInTemplates = path.join(schemaDir, 'templates', artifact.template);
-    const templatePathInRoot = path.join(schemaDir, artifact.template);
+    const templatePathInTemplates = path.join(schemaDir, 'templates', artifact.template!);
+    const templatePathInRoot = path.join(schemaDir, artifact.template!);
 
     if (!fs.existsSync(templatePathInTemplates) && !fs.existsSync(templatePathInRoot)) {
       issues.push({
@@ -854,7 +864,7 @@ export function registerSchemaCommand(program: Command): void {
         // Create template files in templates/ subdirectory (standard location)
         const templatesDir = path.join(schemaDir, 'templates');
         for (const artifact of selectedArtifacts) {
-          const templatePath = path.join(templatesDir, artifact.template);
+          const templatePath = path.join(templatesDir, artifact.template!);
           const templateDir = path.dirname(templatePath);
 
           if (!fs.existsSync(templateDir)) {

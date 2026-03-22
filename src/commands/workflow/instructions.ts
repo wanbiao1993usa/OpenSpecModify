@@ -331,8 +331,8 @@ export async function generateApplyInstructions(
     if (!artifact) continue;
 
     if (isLightArtifact(artifact)) {
-      // Light mode: check .artifact-output/<id>.txt
-      const outputPath = path.join(changeDir, '.artifact-output', `${artifactId}.txt`);
+      // Light mode: check .artifact-output/<id>.md
+      const outputPath = path.join(changeDir, '.artifact-output', `${artifactId}.md`);
       if (!fs.existsSync(outputPath)) {
         missingArtifacts.push(artifactId);
       }
@@ -345,7 +345,7 @@ export async function generateApplyInstructions(
   const contextFiles: Record<string, string> = {};
   for (const artifact of schema.artifacts) {
     if (isLightArtifact(artifact)) {
-      const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.txt`);
+      const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
       if (fs.existsSync(outputPath)) {
         contextFiles[artifact.id] = outputPath;
       }

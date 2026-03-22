@@ -32,7 +32,7 @@ export function detectCompleted(graph: ArtifactGraph, changeDir: string): Comple
       if (artifactMeta.artifacts[artifact.id]) {
         completed.add(artifact.id);
       } else {
-        const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.txt`);
+        const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
         if (fs.existsSync(outputPath)) {
           completed.add(artifact.id);
         }
@@ -142,7 +142,7 @@ function getArtifactTimestamp(
       return new Date(meta.completed_at).getTime();
     }
     // Fallback: check output file mtime
-    const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.txt`);
+    const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
     if (fs.existsSync(outputPath)) {
       return fs.statSync(outputPath).mtimeMs;
     }

@@ -77,7 +77,7 @@ export async function artifactCompleteCommand(
 
   writeArtifactMeta(context.changeDir, artifactId, meta);
 
-  // Handle --output-file: copy file content to .artifact-output/<artifact-id>.txt
+  // Handle --output-file: copy file content to .artifact-output/<artifact-id>.md
   if (options.outputFile) {
     const outputFilePath = options.outputFile;
     if (!fs.existsSync(outputFilePath)) {
@@ -90,7 +90,7 @@ export async function artifactCompleteCommand(
     }
 
     const content = fs.readFileSync(outputFilePath);
-    const destPath = path.join(artifactOutputDir, `${artifactId}.txt`);
+    const destPath = path.join(artifactOutputDir, `${artifactId}.md`);
     fs.writeFileSync(destPath, content);
   }
 

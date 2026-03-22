@@ -91,7 +91,7 @@ export interface DependencyInfo {
   path: string;
   /** Description of the dependency artifact — heavy mode */
   description: string;
-  /** Output path for light-mode dependency (e.g., ".artifact-output/macro.txt") */
+  /** Output path for light-mode dependency (e.g., ".artifact-output/macro.md") */
   outputPath?: string;
   /** Summary from .artifact-meta.yaml */
   summary?: string;
@@ -278,7 +278,7 @@ export function generateInstructions(
       artifactId: artifact.id,
       schemaName: context.schemaName,
       changeDir: context.changeDir,
-      outputPath: `.artifact-output/${artifact.id}.txt`,
+      outputPath: `.artifact-output/${artifact.id}.md`,
       description: '',
       instruction: undefined,
       context: configContext,
@@ -348,7 +348,7 @@ function getLightDependencyInfo(
     // Determine the output path based on whether dep is light or heavy
     let outputPath: string;
     if (depArtifact && isLightArtifact(depArtifact)) {
-      outputPath = `.artifact-output/${id}.txt`;
+      outputPath = `.artifact-output/${id}.md`;
     } else {
       outputPath = depArtifact?.generates ?? id;
     }
@@ -399,7 +399,7 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
 
   const artifactStatuses: ArtifactStatus[] = artifacts.map(artifact => {
     const outputPath = isLightArtifact(artifact)
-      ? `.artifact-output/${artifact.id}.txt`
+      ? `.artifact-output/${artifact.id}.md`
       : artifact.generates!;
 
     if (context.completed.has(artifact.id)) {

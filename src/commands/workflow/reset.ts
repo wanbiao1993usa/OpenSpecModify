@@ -70,8 +70,8 @@ export async function resetCommand(artifactId: string | undefined, options: Rese
     const files: string[] = [];
 
     if (isLightArtifact(a)) {
-      // Light mode: delete .artifact-output/<artifact-id>.txt
-      const outputPath = path.join(context.changeDir, '.artifact-output', `${aid}.txt`);
+      // Light mode: delete .artifact-output/<artifact-id>.md
+      const outputPath = path.join(context.changeDir, '.artifact-output', `${aid}.md`);
       if (fs.existsSync(outputPath)) {
         files.push(outputPath);
       }

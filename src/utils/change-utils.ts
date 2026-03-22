@@ -233,14 +233,14 @@ export async function copyCompletedArtifacts(
     let filesCopied = false;
 
     if (isLightArtifact(artifact)) {
-      // Light mode: copy .artifact-output/<artifact-id>.txt
-      const srcOutputFile = path.join(srcChangeDir, '.artifact-output', `${artifact.id}.txt`);
+      // Light mode: copy .artifact-output/<artifact-id>.md
+      const srcOutputFile = path.join(srcChangeDir, '.artifact-output', `${artifact.id}.md`);
       if (fs.existsSync(srcOutputFile)) {
         const destOutputDir = path.join(destChangeDir, '.artifact-output');
         if (!fs.existsSync(destOutputDir)) {
           fs.mkdirSync(destOutputDir, { recursive: true });
         }
-        const destOutputFile = path.join(destOutputDir, `${artifact.id}.txt`);
+        const destOutputFile = path.join(destOutputDir, `${artifact.id}.md`);
         fs.copyFileSync(srcOutputFile, destOutputFile);
         filesCopied = true;
       }

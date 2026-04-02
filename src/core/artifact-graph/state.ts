@@ -28,14 +28,11 @@ export function detectCompleted(graph: ArtifactGraph, changeDir: string): Comple
 
   for (const artifact of graph.getAllArtifacts()) {
     if (isLightArtifact(artifact)) {
-      // Light mode: check metadata first, then output file existence
+      // Light mode: check metadata first, then generates file existence
       if (artifactMeta.artifacts[artifact.id]) {
         completed.add(artifact.id);
-      } else {
-        const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
-        if (fs.existsSync(outputPath)) {
-          completed.add(artifact.id);
-        }
+      } else if (isArtifactComplete(artifact.generates!, changeDir)) {
+        completed.add(artifact.id);
       }
     } else {
       // Heavy mode: check generated file existence (existing behavior)
@@ -141,12 +138,8 @@ function getArtifactTimestamp(
     if (meta?.completed_at) {
       return new Date(meta.completed_at).getTime();
     }
-    // Fallback: check output file mtime
-    const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
-    if (fs.existsSync(outputPath)) {
-      return fs.statSync(outputPath).mtimeMs;
-    }
-    return null;
+    // Fallback: check generates file mtime
+    return getArtifactMtime(artifact.generates!, changeDir);
   }
 
   // Heavy mode: use file mtime

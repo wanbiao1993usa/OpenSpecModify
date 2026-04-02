@@ -233,16 +233,44 @@ export async function copyCompletedArtifacts(
     let filesCopied = false;
 
     if (isLightArtifact(artifact)) {
-      // Light mode: copy .artifact-output/<artifact-id>.md
-      const srcOutputFile = path.join(srcChangeDir, '.artifact-output', `${artifact.id}.md`);
-      if (fs.existsSync(srcOutputFile)) {
-        const destOutputDir = path.join(destChangeDir, '.artifact-output');
-        if (!fs.existsSync(destOutputDir)) {
-          fs.mkdirSync(destOutputDir, { recursive: true });
+      // Light mode: copy generates output file
+      const generates = artifact.generates!;
+
+      if (isGlobPatternUtil(generates)) {
+        // Handle glob patterns - copy all matching files
+        const fullPattern = path.join(srcChangeDir, generates);
+        const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+        const globMatches = fg.sync(normalizedPattern, { onlyFiles: false });
+
+        for (const srcFile of globMatches) {
+          const relativePath = path.relative(srcChangeDir, srcFile);
+          const destFile = path.join(destChangeDir, relativePath);
+          const destDir = path.dirname(destFile);
+          if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true });
+          }
+          const srcStat = fs.statSync(srcFile);
+          if (srcStat.isDirectory()) {
+            if (!fs.existsSync(destFile)) {
+              fs.mkdirSync(destFile, { recursive: true });
+            }
+          } else {
+            fs.copyFileSync(srcFile, destFile);
+          }
         }
-        const destOutputFile = path.join(destOutputDir, `${artifact.id}.md`);
-        fs.copyFileSync(srcOutputFile, destOutputFile);
-        filesCopied = true;
+        filesCopied = globMatches.length > 0;
+      } else {
+        // Simple file path
+        const srcOutputFile = path.join(srcChangeDir, generates);
+        if (fs.existsSync(srcOutputFile)) {
+          const destOutputFile = path.join(destChangeDir, generates);
+          const destDir = path.dirname(destOutputFile);
+          if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true });
+          }
+          fs.copyFileSync(srcOutputFile, destOutputFile);
+          filesCopied = true;
+        }
       }
     } else {
       // Heavy mode: existing behavior

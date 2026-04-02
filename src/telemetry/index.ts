@@ -82,6 +82,23 @@ function getClient(): PostHog {
       flushAt: 1, // Send immediately, don't batch
       flushInterval: 0, // No timer-based flushing
     });
+
+    // Suppress network errors during flush - telemetry should never produce visible errors.
+    // PostHog internally calls console.error in its flush error handler (logFlushError),
+    // which cannot be intercepted via try/catch or event listeners. We wrap console.error
+    // to filter out PostHog flush errors specifically.
+    posthogClient.on('error', () => {
+      // Silent failure - telemetry should never break CLI
+    });
+
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      const first = args[0];
+      if (typeof first === 'string' && first.includes('Error while flushing PostHog')) {
+        return; // Suppress PostHog network errors
+      }
+      originalConsoleError.apply(console, args);
+    };
   }
   return posthogClient;
 }

@@ -12,7 +12,6 @@ import {
   loadChangeContext,
   generateInstructions,
   resolveSchema,
-  isLightArtifact,
   type ArtifactInstructions,
 } from '../../core/artifact-graph/index.js';
 import {
@@ -330,13 +329,7 @@ export async function generateApplyInstructions(
     const artifact = schema.artifacts.find((a) => a.id === artifactId);
     if (!artifact) continue;
 
-    if (isLightArtifact(artifact)) {
-      // Light mode: check .artifact-output/<id>.md
-      const outputPath = path.join(changeDir, '.artifact-output', `${artifactId}.md`);
-      if (!fs.existsSync(outputPath)) {
-        missingArtifacts.push(artifactId);
-      }
-    } else if (!artifactOutputExists(changeDir, artifact.generates!)) {
+    if (!artifactOutputExists(changeDir, artifact.generates!)) {
       missingArtifacts.push(artifactId);
     }
   }
@@ -344,12 +337,7 @@ export async function generateApplyInstructions(
   // Build context files from all existing artifacts in schema
   const contextFiles: Record<string, string> = {};
   for (const artifact of schema.artifacts) {
-    if (isLightArtifact(artifact)) {
-      const outputPath = path.join(changeDir, '.artifact-output', `${artifact.id}.md`);
-      if (fs.existsSync(outputPath)) {
-        contextFiles[artifact.id] = outputPath;
-      }
-    } else if (artifactOutputExists(changeDir, artifact.generates!)) {
+    if (artifactOutputExists(changeDir, artifact.generates!)) {
       contextFiles[artifact.id] = path.join(changeDir, artifact.generates!);
     }
   }

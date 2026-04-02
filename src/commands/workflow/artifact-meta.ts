@@ -5,10 +5,8 @@
  * - `artifact meta` — display artifact metadata for a change
  */
 
-import ora from 'ora';
 import chalk from 'chalk';
 import path from 'path';
-import * as fs from 'node:fs';
 import { validateChangeExists } from './shared.js';
 import {
   readArtifactMetadata,
@@ -26,7 +24,6 @@ export interface ArtifactCompleteOptions {
   duration?: string;
   summary?: string;
   schema?: string;
-  outputFile?: string;
 }
 
 export interface ArtifactMetaOptions {
@@ -52,8 +49,7 @@ export async function artifactCompleteCommand(
   const context = loadChangeContext(projectRoot, changeName, options.schema);
 
   // Verify the artifact exists in the schema
-  const artifact = context.graph.getArtifact(artifactId);
-  if (!artifact) {
+  if (!context.graph.getArtifact(artifactId)) {
     const available = context.graph.getAllArtifacts().map(a => a.id);
     throw new Error(
       `Artifact '${artifactId}' not found in schema '${context.schemaName}'. Available: ${available.join(', ')}`
@@ -76,23 +72,6 @@ export async function artifactCompleteCommand(
   }
 
   writeArtifactMeta(context.changeDir, artifactId, meta);
-
-  // Handle --output-file: copy file content to .artifact-output/<artifact-id>.md
-  if (options.outputFile) {
-    const outputFilePath = options.outputFile;
-    if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`Output file not found: ${outputFilePath}`);
-    }
-
-    const artifactOutputDir = path.join(context.changeDir, '.artifact-output');
-    if (!fs.existsSync(artifactOutputDir)) {
-      fs.mkdirSync(artifactOutputDir, { recursive: true });
-    }
-
-    const content = fs.readFileSync(outputFilePath);
-    const destPath = path.join(artifactOutputDir, `${artifactId}.md`);
-    fs.writeFileSync(destPath, content);
-  }
 
   console.log(`Recorded metadata for artifact '${artifactId}' in change '${changeName}'.`);
 }

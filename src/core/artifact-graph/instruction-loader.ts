@@ -91,7 +91,7 @@ export interface DependencyInfo {
   path: string;
   /** Description of the dependency artifact — heavy mode */
   description: string;
-  /** Output path for light-mode dependency (e.g., ".artifact-output/macro.md") */
+  /** Output path for dependency (from generates field) */
   outputPath?: string;
   /** Summary from .artifact-meta.yaml */
   summary?: string;
@@ -278,7 +278,7 @@ export function generateInstructions(
       artifactId: artifact.id,
       schemaName: context.schemaName,
       changeDir: context.changeDir,
-      outputPath: `.artifact-output/${artifact.id}.md`,
+      outputPath: artifact.generates!,
       description: '',
       instruction: undefined,
       context: configContext,
@@ -345,13 +345,8 @@ function getLightDependencyInfo(
     const depArtifact = graph.getArtifact(id);
     const meta = artifactMeta.artifacts[id];
 
-    // Determine the output path based on whether dep is light or heavy
-    let outputPath: string;
-    if (depArtifact && isLightArtifact(depArtifact)) {
-      outputPath = `.artifact-output/${id}.md`;
-    } else {
-      outputPath = depArtifact?.generates ?? id;
-    }
+    // Both light and heavy modes use generates for output path
+    const outputPath = depArtifact?.generates ?? id;
 
     return {
       id,
@@ -398,9 +393,7 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
   const artifactMeta = readArtifactMetadata(context.changeDir);
 
   const artifactStatuses: ArtifactStatus[] = artifacts.map(artifact => {
-    const outputPath = isLightArtifact(artifact)
-      ? `.artifact-output/${artifact.id}.md`
-      : artifact.generates!;
+    const outputPath = artifact.generates!;
 
     if (context.completed.has(artifact.id)) {
       // Check if it has artifact complete metadata

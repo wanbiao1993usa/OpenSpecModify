@@ -10,9 +10,10 @@ export const HeavyArtifactSchema = z.object({
   requires: z.array(z.string()).default([]),
 });
 
-// Lightweight artifact definition schema (new: task only)
+// Lightweight artifact definition schema (task + generates)
 export const LightArtifactSchema = z.object({
   id: z.string().min(1, { error: 'Artifact ID is required' }),
+  generates: z.string().min(1, { error: 'generates field is required' }),
   task: z.string().min(1, { error: 'task field is required' }),
   requires: z.array(z.string()).default([]),
 });
@@ -60,10 +61,10 @@ export type SchemaYaml = z.infer<typeof SchemaYamlSchema>;
 
 /**
  * Determines if an artifact is in lightweight mode.
- * Light mode: has `task` field, no `template` and no `generates`.
+ * Light mode: has `task` field, no `template`.
  */
 export function isLightArtifact(artifact: Artifact): boolean {
-  return !!artifact.task && !artifact.template && !artifact.generates;
+  return !!artifact.task && !artifact.template;
 }
 
 /**

@@ -216,9 +216,9 @@ export async function copyCompletedArtifacts(
   const srcGraph = ArtifactGraph.fromSchema(srcSchema);
   const srcCompleted = detectCompleted(srcGraph, srcChangeDir);
 
-  // Resolve the destination schema
+  // Resolve the destination schema and build a map of artifact id → generates
   const destSchema = resolveSchema(destSchemaName, projectRoot);
-  const destArtifactIds = new Set(destSchema.artifacts.map(a => a.id));
+  const destArtifactMap = new Map(destSchema.artifacts.map(a => [a.id, a]));
 
   // Read source artifact metadata
   const srcMeta = readArtifactMetadata(srcChangeDir);
@@ -228,74 +228,49 @@ export async function copyCompletedArtifacts(
 
   for (const artifact of srcGraph.getAllArtifacts()) {
     if (!srcCompleted.has(artifact.id)) continue;
-    if (!destArtifactIds.has(artifact.id)) continue;
+
+    const destArtifact = destArtifactMap.get(artifact.id);
+    if (!destArtifact) continue;
 
     let filesCopied = false;
 
-    if (isLightArtifact(artifact)) {
-      // Light mode: copy generates output file
-      const generates = artifact.generates!;
+    // Source generates path (where to read from)
+    const srcGenerates = artifact.generates!;
+    // Destination generates path (where to write to)
+    const destGenerates = destArtifact.generates!;
 
-      if (isGlobPatternUtil(generates)) {
-        // Handle glob patterns - copy all matching files
-        const fullPattern = path.join(srcChangeDir, generates);
-        const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
-        const globMatches = fg.sync(normalizedPattern, { onlyFiles: false });
+    if (isGlobPatternUtil(srcGenerates)) {
+      // Handle glob patterns - copy all matching files from source
+      const fullPattern = path.join(srcChangeDir, srcGenerates);
+      const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+      const matches = fg.sync(normalizedPattern, { onlyFiles: false });
 
-        for (const srcFile of globMatches) {
-          const relativePath = path.relative(srcChangeDir, srcFile);
-          const destFile = path.join(destChangeDir, relativePath);
-          const destDir = path.dirname(destFile);
-          if (!fs.existsSync(destDir)) {
-            fs.mkdirSync(destDir, { recursive: true });
-          }
-          const srcStat = fs.statSync(srcFile);
-          if (srcStat.isDirectory()) {
-            if (!fs.existsSync(destFile)) {
-              fs.mkdirSync(destFile, { recursive: true });
-            }
-          } else {
-            fs.copyFileSync(srcFile, destFile);
-          }
-        }
-        filesCopied = globMatches.length > 0;
-      } else {
-        // Simple file path
-        const srcOutputFile = path.join(srcChangeDir, generates);
-        if (fs.existsSync(srcOutputFile)) {
-          const destOutputFile = path.join(destChangeDir, generates);
-          const destDir = path.dirname(destOutputFile);
-          if (!fs.existsSync(destDir)) {
-            fs.mkdirSync(destDir, { recursive: true });
-          }
-          fs.copyFileSync(srcOutputFile, destOutputFile);
-          filesCopied = true;
-        }
-      }
-    } else {
-      // Heavy mode: existing behavior
-      const generates = artifact.generates!;
-
-      if (isGlobPatternUtil(generates)) {
-        // Handle glob patterns - copy all matching files and directories
-        const fullPattern = path.join(srcChangeDir, generates);
-        const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
-        const matches = fg.sync(normalizedPattern, { onlyFiles: false });
+      if (isGlobPatternUtil(destGenerates)) {
+        // Both are globs: copy preserving relative structure under dest
+        // Extract the static prefix from dest generates (e.g., "yyy/" from "yyy/**/*.md")
+        const destPrefix = destGenerates.split(/[*?[]/)[0];
+        const srcPrefix = srcGenerates.split(/[*?[]/)[0];
 
         for (const srcFile of matches) {
-          const relativePath = path.relative(srcChangeDir, srcFile);
-          const destFile = path.join(destChangeDir, relativePath);
+          const relativePath = path.relative(path.join(srcChangeDir, srcPrefix), srcFile);
+          const destFile = path.join(destChangeDir, destPrefix, relativePath);
           await copyFileOrDir(srcFile, destFile);
         }
-        if (matches.length > 0) filesCopied = true;
       } else {
-        // Simple file or directory path
-        const srcFile = path.join(srcChangeDir, generates);
-        if (fs.existsSync(srcFile)) {
-          const destFile = path.join(destChangeDir, generates);
-          await copyFileOrDir(srcFile, destFile);
-          filesCopied = true;
+        // Source is glob, dest is simple file — copy first match only
+        if (matches.length > 0) {
+          const destFile = path.join(destChangeDir, destGenerates);
+          await copyFileOrDir(matches[0], destFile);
         }
+      }
+      filesCopied = matches.length > 0;
+    } else {
+      // Simple file or directory path
+      const srcFile = path.join(srcChangeDir, srcGenerates);
+      if (fs.existsSync(srcFile)) {
+        const destFile = path.join(destChangeDir, destGenerates);
+        await copyFileOrDir(srcFile, destFile);
+        filesCopied = true;
       }
     }
 

@@ -99,7 +99,6 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
     artifactId,
     changeName,
     schemaName,
-    changeDir,
     outputPath,
     description,
     instruction,
@@ -158,9 +157,8 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
     console.log();
     for (const dep of dependencies) {
       const status = dep.done ? 'done' : 'missing';
-      const fullPath = path.join(changeDir, dep.path);
       console.log(`<dependency id="${dep.id}" status="${status}">`);
-      console.log(`  <path>${fullPath}</path>`);
+      console.log(`  <path>${dep.path}</path>`);
       console.log(`  <description>${dep.description}</description>`);
       console.log('</dependency>');
     }
@@ -170,7 +168,7 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
 
   // Output location
   console.log('<output>');
-  console.log(`Write to: ${path.join(changeDir, outputPath)}`);
+  console.log(`Write to: ${outputPath}`);
   console.log('</output>');
   console.log();
 

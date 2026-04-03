@@ -59,7 +59,7 @@ export interface ArtifactInstructions {
   schemaName: string;
   /** Full path to change directory */
   changeDir: string;
-  /** Output path pattern (e.g., "proposal.md") — heavy mode only */
+  /** Full output path including change directory (e.g., "/project/openspec/changes/my-change/proposal.md") */
   outputPath: string;
   /** Artifact description — heavy mode only */
   description: string;
@@ -278,7 +278,7 @@ export function generateInstructions(
       artifactId: artifact.id,
       schemaName: context.schemaName,
       changeDir: context.changeDir,
-      outputPath: artifact.generates!,
+      outputPath: path.join(context.changeDir, artifact.generates!),
       description: '',
       instruction: undefined,
       context: configContext,
@@ -292,14 +292,14 @@ export function generateInstructions(
 
   // Heavy-mode artifact: existing behavior
   const templateContent = loadTemplate(context.schemaName, artifact.template!, context.projectRoot);
-  const dependencies = getDependencyInfo(artifact, context.graph, context.completed);
+  const dependencies = getDependencyInfo(artifact, context.graph, context.completed, context.changeDir);
 
   return {
     changeName: context.changeName,
     artifactId: artifact.id,
     schemaName: context.schemaName,
     changeDir: context.changeDir,
-    outputPath: artifact.generates!,
+    outputPath: path.join(context.changeDir, artifact.generates!),
     description: artifact.description || '',
     instruction: artifact.instruction,
     context: configContext,
@@ -316,14 +316,16 @@ export function generateInstructions(
 function getDependencyInfo(
   artifact: Artifact,
   graph: ArtifactGraph,
-  completed: CompletedSet
+  completed: CompletedSet,
+  changeDir: string
 ): DependencyInfo[] {
   return artifact.requires.map(id => {
     const depArtifact = graph.getArtifact(id);
+    const generates = depArtifact?.generates ?? id;
     return {
       id,
       done: completed.has(id),
-      path: depArtifact?.generates ?? id,
+      path: path.join(changeDir, generates),
       description: depArtifact?.description ?? '',
     };
   });
@@ -331,7 +333,7 @@ function getDependencyInfo(
 
 /**
  * Gets dependency info for light-mode artifacts.
- * Returns outputPath (relative to changeDir) and summary from metadata.
+ * Returns full outputPath and summary from metadata.
  */
 function getLightDependencyInfo(
   artifact: Artifact,
@@ -346,14 +348,15 @@ function getLightDependencyInfo(
     const meta = artifactMeta.artifacts[id];
 
     // Both light and heavy modes use generates for output path
-    const outputPath = depArtifact?.generates ?? id;
+    const generates = depArtifact?.generates ?? id;
+    const fullPath = path.join(changeDir, generates);
 
     return {
       id,
       done: completed.has(id),
-      path: outputPath,
+      path: fullPath,
       description: depArtifact?.description ?? '',
-      outputPath,
+      outputPath: fullPath,
       summary: meta?.summary,
     };
   });

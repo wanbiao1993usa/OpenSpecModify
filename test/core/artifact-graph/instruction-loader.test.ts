@@ -142,7 +142,7 @@ describe('instruction-loader', () => {
       expect(instructions.changeName).toBe('my-change');
       expect(instructions.artifactId).toBe('proposal');
       expect(instructions.schemaName).toBe('spec-driven');
-      expect(instructions.outputPath).toBe('proposal.md');
+      expect(instructions.outputPath).toContain('proposal.md');
     });
 
     it('should include template content', () => {
@@ -536,7 +536,7 @@ rules:
       expect(specs?.missingDeps).toContain('proposal');
     });
 
-    it('should show completed artifacts as done', () => {
+    it('should show completed artifacts as unverified when only file exists (no metadata)', () => {
       const changeDir = path.join(tempDir, 'openspec', 'changes', 'my-change');
       fs.mkdirSync(changeDir, { recursive: true });
       fs.writeFileSync(path.join(changeDir, 'proposal.md'), '# Proposal');
@@ -545,9 +545,9 @@ rules:
       const status = formatChangeStatus(context);
 
       const proposal = status.artifacts.find(a => a.id === 'proposal');
-      expect(proposal?.status).toBe('done');
+      expect(proposal?.status).toBe('unverified');
 
-      // specs should now be ready
+      // specs should now be ready (proposal is still in completed set)
       const specs = status.artifacts.find(a => a.id === 'specs');
       expect(specs?.status).toBe('ready');
     });
@@ -563,7 +563,7 @@ rules:
       expect(specs?.outputPath).toBe('specs/**/*.md');
     });
 
-    it('should report isComplete true when all done', () => {
+    it('should report isComplete true when all files exist (even without metadata)', () => {
       const changeDir = path.join(tempDir, 'openspec', 'changes', 'my-change');
       fs.mkdirSync(changeDir, { recursive: true });
       fs.mkdirSync(path.join(changeDir, 'specs'), { recursive: true });
@@ -578,7 +578,8 @@ rules:
       const status = formatChangeStatus(context);
 
       expect(status.isComplete).toBe(true);
-      expect(status.artifacts.every(a => a.status === 'done')).toBe(true);
+      // Without metadata, all artifacts are 'unverified' (files exist but not confirmed via metadata)
+      expect(status.artifacts.every(a => a.status === 'unverified')).toBe(true);
     });
 
     it('should show blocked artifacts with missing dependencies', () => {

@@ -2,8 +2,7 @@
 export {
   ArtifactSchema,
   SchemaYamlSchema,
-  isLightArtifact,
-  isHeavyArtifact,
+  hasTemplate,
   type Artifact,
   type SchemaYaml,
   type CompletedSet,

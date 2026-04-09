@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import fg from 'fast-glob';
 import type { CompletedSet, StaleSet } from './types.js';
-import { isLightArtifact } from './types.js';
 import type { ArtifactGraph } from './graph.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
 import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
@@ -23,22 +22,15 @@ export function detectCompleted(graph: ArtifactGraph, changeDir: string): Comple
     return completed;
   }
 
-  // Read artifact metadata once for light-mode checks
+  // Read artifact metadata once for completion checks
   const artifactMeta = readArtifactMetadata(changeDir);
 
   for (const artifact of graph.getAllArtifacts()) {
-    if (isLightArtifact(artifact)) {
-      // Light mode: check metadata first, then generates file existence
-      if (artifactMeta.artifacts[artifact.id]) {
-        completed.add(artifact.id);
-      } else if (isArtifactComplete(artifact.generates!, changeDir)) {
-        completed.add(artifact.id);
-      }
-    } else {
-      // Heavy mode: check generated file existence (existing behavior)
-      if (isArtifactComplete(artifact.generates!, changeDir)) {
-        completed.add(artifact.id);
-      }
+    // Unified: check metadata first, then generates file existence
+    if (artifactMeta.artifacts[artifact.id]) {
+      completed.add(artifact.id);
+    } else if (isArtifactComplete(artifact.generates!, changeDir)) {
+      completed.add(artifact.id);
     }
   }
 
@@ -120,9 +112,8 @@ export function getArtifactMtime(generates: string, changeDir: string): number |
  * @returns Set of stale artifact IDs
  */
 /**
- * Gets the completion timestamp for an artifact, handling both light and heavy modes.
- * - Light mode: uses completedAt from .artifact-meta.yaml
- * - Heavy mode: uses file mtime from generates output
+ * Gets the completion timestamp for an artifact.
+ * Unified: uses completedAt from .artifact-meta.yaml first, falls back to file mtime.
  * Returns milliseconds since epoch, or null if no timestamp available.
  */
 function getArtifactTimestamp(
@@ -132,17 +123,11 @@ function getArtifactTimestamp(
 ): number | null {
   if (!artifact) return null;
 
-  if (isLightArtifact(artifact)) {
-    // Light mode: use completedAt from metadata
-    const meta = artifactMeta.artifacts[artifact.id];
-    if (meta?.completed_at) {
-      return new Date(meta.completed_at).getTime();
-    }
-    // Fallback: check generates file mtime
-    return getArtifactMtime(artifact.generates!, changeDir);
+  // Prefer metadata timestamp, fall back to file mtime
+  const meta = artifactMeta.artifacts[artifact.id];
+  if (meta?.completed_at) {
+    return new Date(meta.completed_at).getTime();
   }
-
-  // Heavy mode: use file mtime
   return getArtifactMtime(artifact.generates!, changeDir);
 }
 
@@ -157,7 +142,7 @@ export function detectStale(
     return stale;
   }
 
-  // Read artifact metadata for light-mode timestamp comparisons
+  // Read artifact metadata for timestamp comparisons
   const artifactMeta = readArtifactMetadata(changeDir);
 
   // Cache timestamps to avoid redundant reads

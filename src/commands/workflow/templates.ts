@@ -66,11 +66,13 @@ export async function templatesCommand(options: TemplatesOptions): Promise<void>
       source = 'package';
     }
 
-    const templates: TemplateInfo[] = graph.getAllArtifacts().map((artifact) => ({
-      artifactId: artifact.id,
-      templatePath: path.join(schemaDir, 'templates', artifact.template || ''),
-      source,
-    }));
+    const templates: TemplateInfo[] = graph.getAllArtifacts()
+      .filter((artifact) => !!artifact.template)
+      .map((artifact) => ({
+        artifactId: artifact.id,
+        templatePath: path.join(schemaDir, 'templates', artifact.template!),
+        source,
+      }));
 
     spinner.stop();
 

@@ -107,6 +107,7 @@ version: 99
 artifacts:
   - id: custom
     generates: custom.md
+    instruction: Create the artifact
     description: Custom artifact
     template: custom.md
 `;
@@ -173,11 +174,13 @@ version: 1
 artifacts:
   - id: a
     generates: a.md
+    instruction: Create the artifact
     description: A
     template: a.md
     requires: [b]
   - id: b
     generates: b.md
+    instruction: Create the artifact
     description: B
     template: b.md
     requires: [a]
@@ -199,6 +202,7 @@ version: 1
 artifacts:
   - id: a
     generates: a.md
+    instruction: Create the artifact
     description: A
     template: a.md
     requires: [nonexistent]
@@ -442,6 +446,7 @@ description: Team workflow
 artifacts:
   - id: spec
     generates: spec.md
+    instruction: Create the artifact
     description: Specification
     template: spec.md
 `
@@ -464,6 +469,7 @@ version: 1
 artifacts:
   - id: user-artifact
     generates: user.md
+    instruction: Create the artifact
     description: User artifact
     template: user.md
 `
@@ -480,6 +486,7 @@ version: 2
 artifacts:
   - id: project-artifact
     generates: project.md
+    instruction: Create the artifact
     description: Project artifact
     template: project.md
 `
@@ -559,6 +566,7 @@ description: Team workflow
 artifacts:
   - id: spec
     generates: spec.md
+    instruction: Create the artifact
     description: Specification
     template: spec.md
 `
@@ -592,6 +600,7 @@ description: User custom
 artifacts:
   - id: artifact
     generates: artifact.md
+    instruction: Create the artifact
     description: Artifact
     template: artifact.md
 `
@@ -619,6 +628,7 @@ description: User shared
 artifacts:
   - id: a
     generates: a.md
+    instruction: Create the artifact
     description: A
     template: a.md
 `
@@ -636,6 +646,7 @@ description: Project shared
 artifacts:
   - id: b
     generates: b.md
+    instruction: Create the artifact
     description: B
     template: b.md
 `

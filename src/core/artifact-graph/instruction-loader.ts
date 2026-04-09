@@ -7,7 +7,7 @@ import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
 import { readArtifactMetadata } from '../../utils/artifact-metadata.js';
 import type { Artifact, CompletedSet, StaleSet } from './types.js';
-import { isLightArtifact } from './types.js';
+import { hasTemplate } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
 const shownWarnings = new Set<string>();
@@ -47,8 +47,7 @@ export interface ChangeContext {
 
 /**
  * Enriched instructions for creating an artifact.
- * For heavy-mode artifacts: includes instruction, template, outputPath, description.
- * For light-mode artifacts: includes task and dependencies with output paths.
+ * Unified model: instruction is always present, template is optional.
  */
 export interface ArtifactInstructions {
   /** Change name */
@@ -61,39 +60,35 @@ export interface ArtifactInstructions {
   changeDir: string;
   /** Full output path including change directory (e.g., "/project/openspec/changes/my-change/proposal.md") */
   outputPath: string;
-  /** Artifact description — heavy mode only */
+  /** Artifact description */
   description: string;
-  /** Guidance on how to create this artifact (from schema instruction field) — heavy mode only */
-  instruction: string | undefined;
+  /** Guidance on how to create this artifact (from schema instruction field) */
+  instruction: string;
   /** Project context from config (constraints/background for AI, not to be included in output) */
   context: string | undefined;
   /** Artifact-specific rules from config (constraints for AI, not to be included in output) */
   rules: string[] | undefined;
-  /** Template content (structure to follow) — heavy mode only */
+  /** Template content (structure to follow), empty string if no template */
   template: string;
   /** Dependencies with completion status and paths */
   dependencies: DependencyInfo[];
   /** Artifacts that become available after completing this one */
   unlocks: string[];
-  /** Task description — light mode only */
-  task?: string;
 }
 
 /**
- * Dependency information including path and description.
+ * Dependency information including output path, description, and optional summary.
  */
 export interface DependencyInfo {
   /** Artifact ID */
   id: string;
   /** Whether the dependency is completed */
   done: boolean;
-  /** Relative output path of the dependency (e.g., "proposal.md") — heavy mode */
-  path: string;
-  /** Description of the dependency artifact — heavy mode */
+  /** Full output path of the dependency */
+  outputPath: string;
+  /** Description of the dependency artifact */
   description: string;
-  /** Output path for dependency (from generates field) */
-  outputPath?: string;
-  /** Summary from .artifact-meta.yaml */
+  /** Summary from .artifact-meta.yaml (if available) */
   summary?: string;
 }
 
@@ -270,28 +265,12 @@ export function generateInstructions(
   const rulesForArtifact = projectConfig?.rules?.[artifactId];
   const configRules = rulesForArtifact && rulesForArtifact.length > 0 ? rulesForArtifact : undefined;
 
-  // Light-mode artifact: return task + dependencies with output paths
-  if (isLightArtifact(artifact)) {
-    const dependencies = getLightDependencyInfo(artifact, context.graph, context.completed, context.changeDir);
-    return {
-      changeName: context.changeName,
-      artifactId: artifact.id,
-      schemaName: context.schemaName,
-      changeDir: context.changeDir,
-      outputPath: path.join(context.changeDir, artifact.generates!),
-      description: '',
-      instruction: undefined,
-      context: configContext,
-      rules: configRules,
-      template: '',
-      dependencies,
-      unlocks,
-      task: artifact.task,
-    };
-  }
+  // Load template content if artifact has a template, otherwise empty string
+  const templateContent = hasTemplate(artifact)
+    ? loadTemplate(context.schemaName, artifact.template!, context.projectRoot)
+    : '';
 
-  // Heavy-mode artifact: existing behavior
-  const templateContent = loadTemplate(context.schemaName, artifact.template!, context.projectRoot);
+  // Unified dependency info for all artifacts
   const dependencies = getDependencyInfo(artifact, context.graph, context.completed, context.changeDir);
 
   return {
@@ -311,31 +290,10 @@ export function generateInstructions(
 }
 
 /**
- * Gets dependency info including paths and descriptions (heavy mode).
+ * Gets dependency info including paths, descriptions, output paths, and summaries.
+ * Unified for all artifacts — always provides outputPath and summary when available.
  */
 function getDependencyInfo(
-  artifact: Artifact,
-  graph: ArtifactGraph,
-  completed: CompletedSet,
-  changeDir: string
-): DependencyInfo[] {
-  return artifact.requires.map(id => {
-    const depArtifact = graph.getArtifact(id);
-    const generates = depArtifact?.generates ?? id;
-    return {
-      id,
-      done: completed.has(id),
-      path: path.join(changeDir, generates),
-      description: depArtifact?.description ?? '',
-    };
-  });
-}
-
-/**
- * Gets dependency info for light-mode artifacts.
- * Returns full outputPath and summary from metadata.
- */
-function getLightDependencyInfo(
   artifact: Artifact,
   graph: ArtifactGraph,
   completed: CompletedSet,
@@ -346,17 +304,14 @@ function getLightDependencyInfo(
   return artifact.requires.map(id => {
     const depArtifact = graph.getArtifact(id);
     const meta = artifactMeta.artifacts[id];
-
-    // Both light and heavy modes use generates for output path
     const generates = depArtifact?.generates ?? id;
     const fullPath = path.join(changeDir, generates);
 
     return {
       id,
       done: completed.has(id),
-      path: fullPath,
-      description: depArtifact?.description ?? '',
       outputPath: fullPath,
+      description: depArtifact?.description ?? '',
       summary: meta?.summary,
     };
   });

@@ -81,6 +81,7 @@ artifacts:
   - id: proposal
     generates: proposal.md
     description: Proposal
+    instruction: Create the proposal document
     template: proposal.md
 `
       );
@@ -116,6 +117,7 @@ artifacts:
   - id: proposal
     generates: proposal.md
     description: Proposal
+    instruction: Create the proposal document
     template: proposal.md
 `
       );
@@ -141,6 +143,7 @@ artifacts:
   - id: proposal
     generates: proposal.md
     description: Proposal
+    instruction: Create the proposal document
     template: missing-template.md
 `
       );
@@ -162,12 +165,14 @@ artifacts:
   - id: a
     generates: a.md
     description: A
+    instruction: Create artifact A
     template: a.md
     requires:
       - b
   - id: b
     generates: b.md
     description: B
+    instruction: Create artifact B
     template: b.md
     requires:
       - a
@@ -189,6 +194,7 @@ artifacts:
   - id: a
     generates: a.md
     description: A
+    instruction: Create artifact A
     template: a.md
     requires:
       - nonexistent
@@ -260,6 +266,7 @@ artifacts:
             id: 'proposal',
             generates: 'proposal.md',
             description: 'Proposal',
+            instruction: 'Create the proposal document',
             template: 'proposal.md',
             requires: [],
           },
@@ -294,22 +301,26 @@ artifacts:
   - id: proposal
     generates: proposal.md
     description: Proposal
+    instruction: Create the proposal document
     template: proposal.md
   - id: specs
     generates: specs/**/*.md
     description: Specs
+    instruction: Create the specifications
     template: specs/spec.md
     requires:
       - proposal
   - id: design
     generates: design.md
     description: Design
+    instruction: Create the design document
     template: design.md
     requires:
       - specs
   - id: tasks
     generates: tasks.md
     description: Tasks
+    instruction: Create the task list
     template: tasks.md
     requires:
       - design

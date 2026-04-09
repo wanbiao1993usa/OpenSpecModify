@@ -27,7 +27,7 @@ describe('artifact-graph/state', () => {
   describe('detectCompleted', () => {
     it('should return empty set when changeDir does not exist', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -38,7 +38,7 @@ describe('artifact-graph/state', () => {
 
     it('should return empty set when changeDir is empty', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -49,7 +49,7 @@ describe('artifact-graph/state', () => {
 
     it('should mark artifact complete when file exists', () => {
       const schema = createSchema([
-        { id: 'proposal', generates: 'proposal.md', description: 'Proposal', template: 't.md', requires: [] },
+        { id: 'proposal', generates: 'proposal.md', instruction: 'Create proposal', description: 'Proposal', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -63,8 +63,8 @@ describe('artifact-graph/state', () => {
 
     it('should not mark artifact complete when file does not exist', () => {
       const schema = createSchema([
-        { id: 'proposal', generates: 'proposal.md', description: 'Proposal', template: 't.md', requires: [] },
-        { id: 'design', generates: 'design.md', description: 'Design', template: 't.md', requires: [] },
+        { id: 'proposal', generates: 'proposal.md', instruction: 'Create proposal', description: 'Proposal', template: 't.md', requires: [] },
+        { id: 'design', generates: 'design.md', instruction: 'Create design', description: 'Design', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -79,7 +79,7 @@ describe('artifact-graph/state', () => {
 
     it('should handle nested paths', () => {
       const schema = createSchema([
-        { id: 'nested', generates: 'docs/design.md', description: 'Nested', template: 't.md', requires: [] },
+        { id: 'nested', generates: 'docs/design.md', instruction: 'Create nested', description: 'Nested', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -94,7 +94,7 @@ describe('artifact-graph/state', () => {
 
     it('should detect glob pattern as complete when files exist', () => {
       const schema = createSchema([
-        { id: 'specs', generates: 'specs/*.md', description: 'Specs', template: 't.md', requires: [] },
+        { id: 'specs', generates: 'specs/*.md', instruction: 'Create specs', description: 'Specs', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -110,7 +110,7 @@ describe('artifact-graph/state', () => {
 
     it('should not mark glob pattern complete when directory is empty', () => {
       const schema = createSchema([
-        { id: 'specs', generates: 'specs/*.md', description: 'Specs', template: 't.md', requires: [] },
+        { id: 'specs', generates: 'specs/*.md', instruction: 'Create specs', description: 'Specs', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -124,7 +124,7 @@ describe('artifact-graph/state', () => {
 
     it('should not mark glob pattern complete when directory does not exist', () => {
       const schema = createSchema([
-        { id: 'specs', generates: 'specs/*.md', description: 'Specs', template: 't.md', requires: [] },
+        { id: 'specs', generates: 'specs/*.md', instruction: 'Create specs', description: 'Specs', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -135,7 +135,7 @@ describe('artifact-graph/state', () => {
 
     it('should not mark glob pattern complete when only non-matching files exist', () => {
       const schema = createSchema([
-        { id: 'specs', generates: 'specs/*.md', description: 'Specs', template: 't.md', requires: [] },
+        { id: 'specs', generates: 'specs/*.md', instruction: 'Create specs', description: 'Specs', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -150,10 +150,10 @@ describe('artifact-graph/state', () => {
 
     it('should handle multiple artifacts with mixed completion', () => {
       const schema = createSchema([
-        { id: 'proposal', generates: 'proposal.md', description: 'Proposal', template: 't.md', requires: [] },
-        { id: 'specs', generates: 'specs/*.md', description: 'Specs', template: 't.md', requires: ['proposal'] },
-        { id: 'design', generates: 'design.md', description: 'Design', template: 't.md', requires: ['proposal'] },
-        { id: 'tasks', generates: 'tasks.md', description: 'Tasks', template: 't.md', requires: ['specs', 'design'] },
+        { id: 'proposal', generates: 'proposal.md', instruction: 'Create proposal', description: 'Proposal', template: 't.md', requires: [] },
+        { id: 'specs', generates: 'specs/*.md', instruction: 'Create specs', description: 'Specs', template: 't.md', requires: ['proposal'] },
+        { id: 'design', generates: 'design.md', instruction: 'Create design', description: 'Design', template: 't.md', requires: ['proposal'] },
+        { id: 'tasks', generates: 'tasks.md', instruction: 'Create tasks', description: 'Tasks', template: 't.md', requires: ['specs', 'design'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 

@@ -11,11 +11,13 @@ description: A test schema
 artifacts:
   - id: proposal
     generates: proposal.md
+    instruction: Create the proposal
     description: Initial proposal
     template: templates/proposal.md
     requires: []
   - id: design
     generates: design.md
+    instruction: Create the design
     description: Design document
     template: templates/design.md
     requires:
@@ -37,7 +39,7 @@ name: test-schema
 version: 1
 artifacts:
   - id: proposal
-    description: Missing generates and template
+    description: Missing generates and instruction
 `;
       expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
       expect(() => parseSchema(yaml)).toThrow(/generates/);
@@ -49,6 +51,7 @@ version: 1
 artifacts:
   - id: proposal
     generates: proposal.md
+    instruction: Create the proposal
     description: Test
     template: templates/proposal.md
 `;
@@ -63,6 +66,7 @@ version: 0
 artifacts:
   - id: proposal
     generates: proposal.md
+    instruction: Create the proposal
     description: Test
     template: templates/proposal.md
 `;
@@ -87,10 +91,12 @@ version: 1
 artifacts:
   - id: proposal
     generates: proposal.md
+    instruction: Create the proposal
     description: First
     template: templates/proposal.md
   - id: proposal
     generates: other.md
+    instruction: Create the other
     description: Duplicate
     template: templates/other.md
 `;
@@ -105,6 +111,7 @@ version: 1
 artifacts:
   - id: design
     generates: design.md
+    instruction: Create the design
     description: Design doc
     template: templates/design.md
     requires:
@@ -121,6 +128,7 @@ version: 1
 artifacts:
   - id: A
     generates: a.md
+    instruction: Create A
     description: Self reference
     template: templates/a.md
     requires:
@@ -137,12 +145,14 @@ version: 1
 artifacts:
   - id: A
     generates: a.md
+    instruction: Create A
     description: A
     template: templates/a.md
     requires:
       - B
   - id: B
     generates: b.md
+    instruction: Create B
     description: B
     template: templates/b.md
     requires:
@@ -160,18 +170,21 @@ version: 1
 artifacts:
   - id: A
     generates: a.md
+    instruction: Create A
     description: A
     template: templates/a.md
     requires:
       - C
   - id: B
     generates: b.md
+    instruction: Create B
     description: B
     template: templates/b.md
     requires:
       - A
   - id: C
     generates: c.md
+    instruction: Create C
     description: C
     template: templates/c.md
     requires:
@@ -197,6 +210,7 @@ version: 1
 artifacts:
   - id: root
     generates: root.md
+    instruction: Create root
     description: Root artifact
     template: templates/root.md
 `;

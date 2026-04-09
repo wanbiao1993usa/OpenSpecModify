@@ -8,7 +8,6 @@ import { ArtifactGraph } from '../core/artifact-graph/graph.js';
 import { detectCompleted } from '../core/artifact-graph/state.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
 import { readArtifactMetadata, writeArtifactMeta } from './artifact-metadata.js';
-import { isLightArtifact } from '../core/artifact-graph/types.js';
 
 const DEFAULT_SCHEMA = 'spec-driven';
 
@@ -277,9 +276,9 @@ export async function copyCompletedArtifacts(
     // Copy artifact metadata alongside the files
     const existingMeta = srcMeta.artifacts[artifact.id];
     if (existingMeta) {
-      // Source has metadata — copy it (counts as copied even without output file for light mode)
+      // Source has metadata — copy it (metadata alone counts as copied)
       writeArtifactMeta(destChangeDir, artifact.id, existingMeta);
-      if (!filesCopied) filesCopied = true;  // metadata alone counts for light mode
+      if (!filesCopied) filesCopied = true;
     } else if (filesCopied) {
       // Source lacks .artifact-meta.yaml (old version) — generate default entry
       const srcChangeName = path.basename(srcChangeDir);

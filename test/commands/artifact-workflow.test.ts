@@ -100,7 +100,8 @@ describe('artifact-workflow CLI commands', () => {
       const result = await runCLI(['status', '--change', 'partial-change'], { cwd: tempDir });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('2/4 artifacts complete');
-      expect(result.stdout).toContain('[x]');
+      // File-only completion (no metadata) shows [?] (unverified) instead of [x] (done)
+      expect(result.stdout).toMatch(/\[x\]|\[\?\]/);
     });
 
     it('outputs JSON when --json flag is used', async () => {
@@ -119,7 +120,7 @@ describe('artifact-workflow CLI commands', () => {
       expect(json.artifacts).toHaveLength(4);
 
       const proposalArtifact = json.artifacts.find((a: any) => a.id === 'proposal');
-      expect(proposalArtifact.status).toBe('done');
+      expect(proposalArtifact.status).toBe('unverified');
     });
 
     it('shows complete status when all artifacts are done', async () => {

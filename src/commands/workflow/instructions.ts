@@ -158,7 +158,7 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
     for (const dep of dependencies) {
       const status = dep.done ? 'done' : 'missing';
       console.log(`<dependency id="${dep.id}" status="${status}">`);
-      console.log(`  <path>${dep.path}</path>`);
+      console.log(`  <path>${dep.outputPath}</path>`);
       console.log(`  <description>${dep.description}</description>`);
       console.log('</dependency>');
     }
@@ -172,20 +172,20 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
   console.log('</output>');
   console.log();
 
-  // Instruction (guidance)
-  if (instruction) {
-    console.log('<instruction>');
-    console.log(instruction.trim());
-    console.log('</instruction>');
+  // Instruction (always present)
+  console.log('<instruction>');
+  console.log(instruction.trim());
+  console.log('</instruction>');
+  console.log();
+
+  // Template (only if artifact has a template)
+  if (template) {
+    console.log('<template>');
+    console.log('<!-- Use this as the structure for your output file. Fill in the sections. -->');
+    console.log(template.trim());
+    console.log('</template>');
     console.log();
   }
-
-  // Template
-  console.log('<template>');
-  console.log('<!-- Use this as the structure for your output file. Fill in the sections. -->');
-  console.log(template.trim());
-  console.log('</template>');
-  console.log();
 
   // Success criteria placeholder
   console.log('<success_criteria>');

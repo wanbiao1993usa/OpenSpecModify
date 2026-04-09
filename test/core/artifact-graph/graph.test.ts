@@ -12,7 +12,7 @@ describe('artifact-graph/graph', () => {
   describe('fromSchema', () => {
     it('should create graph from schema object', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
 
       const graph = ArtifactGraph.fromSchema(schema);
@@ -30,6 +30,7 @@ version: 2
 artifacts:
   - id: doc
     generates: doc.md
+    instruction: Create the documentation
     description: Documentation
     template: templates/doc.md
 `;
@@ -44,7 +45,7 @@ artifacts:
   describe('getArtifact', () => {
     it('should return artifact by ID', () => {
       const schema = createSchema([
-        { id: 'proposal', generates: 'proposal.md', description: 'Proposal', template: 't.md', requires: [] },
+        { id: 'proposal', generates: 'proposal.md', instruction: 'Create proposal', description: 'Proposal', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -57,7 +58,7 @@ artifacts:
 
     it('should return undefined for non-existent ID', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -68,9 +69,9 @@ artifacts:
   describe('getAllArtifacts', () => {
     it('should return all artifacts', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -84,9 +85,9 @@ artifacts:
   describe('getBuildOrder', () => {
     it('should return correct order for linear chain A → B → C', () => {
       const schema = createSchema([
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: ['B'] },
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: ['B'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -98,10 +99,10 @@ artifacts:
     it('should handle diamond dependency correctly', () => {
       // A → B, A → C, B → D, C → D
       const schema = createSchema([
-        { id: 'D', generates: 'd.md', description: 'D', template: 't.md', requires: ['B', 'C'] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: ['A'] },
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'D', generates: 'd.md', instruction: 'Create D', description: 'D', template: 't.md', requires: ['B', 'C'] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -116,9 +117,9 @@ artifacts:
 
     it('should return independent artifacts in stable sorted order', () => {
       const schema = createSchema([
-        { id: 'Z', generates: 'z.md', description: 'Z', template: 't.md', requires: [] },
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'M', generates: 'm.md', description: 'M', template: 't.md', requires: [] },
+        { id: 'Z', generates: 'z.md', instruction: 'Create Z', description: 'Z', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'M', generates: 'm.md', instruction: 'Create M', description: 'M', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -132,9 +133,9 @@ artifacts:
   describe('getNextArtifacts', () => {
     it('should return root artifacts when nothing completed', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -145,8 +146,8 @@ artifacts:
 
     it('should include artifact when all deps completed', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -157,8 +158,8 @@ artifacts:
 
     it('should not include completed artifacts', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -170,10 +171,10 @@ artifacts:
     it('should handle diamond dependency correctly', () => {
       // D requires B and C
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: ['A'] },
-        { id: 'D', generates: 'd.md', description: 'D', template: 't.md', requires: ['B', 'C'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: ['A'] },
+        { id: 'D', generates: 'd.md', instruction: 'Create D', description: 'D', template: 't.md', requires: ['B', 'C'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -191,8 +192,8 @@ artifacts:
   describe('isComplete', () => {
     it('should return true when all artifacts completed', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -201,8 +202,8 @@ artifacts:
 
     it('should return false when some artifacts incomplete', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -214,7 +215,7 @@ artifacts:
   describe('getBlocked', () => {
     it('should return empty object when nothing is blocked', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -223,8 +224,8 @@ artifacts:
 
     it('should return artifact blocked by single dependency', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -233,9 +234,9 @@ artifacts:
 
     it('should return artifact blocked by multiple dependencies', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: [] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: ['A', 'B'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: [] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: ['A', 'B'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -245,9 +246,9 @@ artifacts:
 
     it('should only list unmet dependencies', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: [] },
-        { id: 'C', generates: 'c.md', description: 'C', template: 't.md', requires: ['A', 'B'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: [] },
+        { id: 'C', generates: 'c.md', instruction: 'Create C', description: 'C', template: 't.md', requires: ['A', 'B'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 
@@ -257,8 +258,8 @@ artifacts:
 
     it('should not include completed artifacts', () => {
       const schema = createSchema([
-        { id: 'A', generates: 'a.md', description: 'A', template: 't.md', requires: [] },
-        { id: 'B', generates: 'b.md', description: 'B', template: 't.md', requires: ['A'] },
+        { id: 'A', generates: 'a.md', instruction: 'Create A', description: 'A', template: 't.md', requires: [] },
+        { id: 'B', generates: 'b.md', instruction: 'Create B', description: 'B', template: 't.md', requires: ['A'] },
       ]);
       const graph = ArtifactGraph.fromSchema(schema);
 

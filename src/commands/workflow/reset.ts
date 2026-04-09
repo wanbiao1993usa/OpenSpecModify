@@ -68,7 +68,7 @@ export async function resetCommand(artifactId: string | undefined, options: Rese
 
     const files: string[] = [];
 
-    // Both light and heavy modes use generates for output path
+    // All artifacts use generates for output path
     const generates = a.generates!;
 
     if (isGlobPattern(generates)) {

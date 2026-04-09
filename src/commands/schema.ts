@@ -12,7 +12,6 @@ import {
 } from '../core/artifact-graph/resolver.js';
 import { parseSchema, SchemaValidationError } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml, Artifact } from '../core/artifact-graph/types.js';
-import { isLightArtifact } from '../core/artifact-graph/types.js';
 
 /**
  * Schema source location type
@@ -196,21 +195,21 @@ function validateSchema(
     return { valid: false, issues };
   }
 
-  // Check template files exist (only for heavy-mode artifacts)
+  // Check template files exist (only for artifacts with a template)
   // Templates can be in schemaDir directly or in a templates/ subdirectory
   if (verbose) {
     console.log('  Checking template files...');
   }
   for (const artifact of schema.artifacts) {
-    // Skip template check for light-mode artifacts (they have task, no template)
-    if (isLightArtifact(artifact)) {
+    // Skip template check for artifacts without a template
+    if (!artifact.template) {
       if (verbose) {
-        console.log(`    Skipping template check for light-mode artifact '${artifact.id}'`);
+        console.log(`    Skipping template check for artifact '${artifact.id}' (no template)`);
       }
       continue;
     }
 
-    // Heavy-mode artifact: template must exist
+    // Artifact has a template: verify the template file exists
     // Try templates subdirectory first (standard location), then root
     const templatePathInTemplates = path.join(schemaDir, 'templates', artifact.template!);
     const templatePathInRoot = path.join(schemaDir, artifact.template!);
@@ -265,30 +264,35 @@ function copyDirRecursive(src: string, dest: string): void {
 const DEFAULT_ARTIFACTS: Array<{
   id: string;
   description: string;
+  instruction: string;
   generates: string;
   template: string;
 }> = [
   {
     id: 'proposal',
     description: 'High-level description of the change, its motivation, and scope',
+    instruction: 'Create the proposal document that establishes WHY this change is needed.',
     generates: 'proposal.md',
     template: 'proposal.md',
   },
   {
     id: 'specs',
     description: 'Detailed specifications with requirements and scenarios',
+    instruction: 'Create specification files that define WHAT the system should do.',
     generates: 'specs/**/*.md',
     template: 'specs/spec.md',
   },
   {
     id: 'design',
     description: 'Technical design decisions and implementation approach',
+    instruction: 'Create the design document that explains HOW to implement the change.',
     generates: 'design.md',
     template: 'design.md',
   },
   {
     id: 'tasks',
     description: 'Implementation checklist with trackable tasks',
+    instruction: 'Create the task list that breaks down the implementation work.',
     generates: 'tasks.md',
     template: 'tasks.md',
   },
@@ -820,6 +824,7 @@ export function registerSchemaCommand(program: Command): void {
           const artifact: Artifact = {
             id: template.id,
             generates: template.generates,
+            instruction: template.instruction,
             description: template.description,
             template: template.template,
             requires: [],

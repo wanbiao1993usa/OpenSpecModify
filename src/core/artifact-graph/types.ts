@@ -1,34 +1,17 @@
 import { z } from 'zod';
 
-// Heavy-mode artifact definition schema (existing: generates + template + instruction)
-export const HeavyArtifactSchema = z.object({
-  id: z.string().min(1, { error: 'Artifact ID is required' }),
-  generates: z.string().min(1, { error: 'generates field is required' }),
-  description: z.string(),
-  template: z.string().min(1, { error: 'template field is required' }),
-  instruction: z.string().optional(),
-  requires: z.array(z.string()).default([]),
-});
-
-// Lightweight artifact definition schema (task + generates)
-export const LightArtifactSchema = z.object({
-  id: z.string().min(1, { error: 'Artifact ID is required' }),
-  generates: z.string().min(1, { error: 'generates field is required' }),
-  task: z.string().min(1, { error: 'task field is required' }),
-  requires: z.array(z.string()).default([]),
-});
-
-// Union artifact schema that accepts either heavy or light mode
-// Validation logic is handled in parseSchema for better error messages
+// Unified artifact definition schema
+// - instruction (required): guidance on how to create this artifact
+// - template (optional): structural template file to follow
+// - generates (required): output file path or glob pattern
+// Artifacts without a template automatically use lightweight behavior
+// (metadata-first completion detection, richer dependency info).
 export const ArtifactSchema = z.object({
   id: z.string().min(1, { error: 'Artifact ID is required' }),
-  // Heavy-mode fields (optional for light mode)
-  generates: z.string().optional(),
+  generates: z.string().min(1, { error: 'generates field is required' }),
+  instruction: z.string().min(1, { error: 'instruction field is required' }),
   description: z.string().optional(),
   template: z.string().optional(),
-  instruction: z.string().optional(),
-  // Light-mode fields
-  task: z.string().optional(),
   requires: z.array(z.string()).default([]),
 });
 
@@ -54,25 +37,16 @@ export const SchemaYamlSchema = z.object({
 
 // Derived TypeScript types
 export type Artifact = z.infer<typeof ArtifactSchema>;
-export type HeavyArtifact = z.infer<typeof HeavyArtifactSchema>;
-export type LightArtifact = z.infer<typeof LightArtifactSchema>;
 export type ApplyPhase = z.infer<typeof ApplyPhaseSchema>;
 export type SchemaYaml = z.infer<typeof SchemaYamlSchema>;
 
 /**
- * Determines if an artifact is in lightweight mode.
- * Light mode: has `task` field, no `template`.
+ * Determines if an artifact has no template (lightweight).
+ * Lightweight artifacts use metadata-first completion detection
+ * and richer dependency info (outputPath + summary).
  */
-export function isLightArtifact(artifact: Artifact): boolean {
-  return !!artifact.task && !artifact.template;
-}
-
-/**
- * Determines if an artifact is in heavy (traditional) mode.
- * Heavy mode: has `instruction` or `template` + `generates`.
- */
-export function isHeavyArtifact(artifact: Artifact): boolean {
-  return !!artifact.template && !!artifact.generates;
+export function hasTemplate(artifact: Artifact): boolean {
+  return !!artifact.template;
 }
 
 // Per-change metadata schema

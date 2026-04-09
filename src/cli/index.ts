@@ -38,6 +38,22 @@ import {
   type ArtifactCompleteOptions,
   type ArtifactMetaOptions,
 } from '../commands/workflow/artifact-meta.js';
+import {
+  microListCommand,
+  microNewCommand,
+  microStatusCommand,
+  microInstructionsCommand,
+  microCompleteCommand,
+  microResetCommand,
+  microValidateCommand,
+  type MicroListOptions,
+  type MicroNewOptions,
+  type MicroStatusOptions,
+  type MicroInstructionsOptions,
+  type MicroCompleteOptions,
+  type MicroResetOptions,
+  type MicroValidateOptions,
+} from '../commands/micro.js';
 import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
 const program = new Command();
@@ -580,6 +596,111 @@ artifactCmd
   .action(async (options: ArtifactMetaOptions) => {
     try {
       await artifactMetaCommand(options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// ═══════════════════════════════════════════════════════════
+// Micro Commands
+// ═══════════════════════════════════════════════════════════
+
+const microCmd = program
+  .command('micro')
+  .description('Manage micro artifact schemas (lightweight, in-memory DAG execution)');
+
+microCmd
+  .command('list')
+  .description('List all micro schemas')
+  .option('--json', 'Output as JSON')
+  .action(async (options: MicroListOptions) => {
+    try {
+      await microListCommand(options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('new <name>')
+  .description('Create a new micro schema template')
+  .option('--description <text>', 'Description for the schema')
+  .action(async (name: string, options: MicroNewOptions) => {
+    try {
+      await microNewCommand(name, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('status <name>')
+  .description('Display artifact completion status for a micro schema')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string, options: MicroStatusOptions) => {
+    try {
+      await microStatusCommand(name, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('instructions <name> [artifact]')
+  .description('Output instruction for a specific or next ready artifact')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string, artifact: string | undefined, options: MicroInstructionsOptions) => {
+    try {
+      await microInstructionsCommand(name, artifact, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('complete <name> <artifact>')
+  .description('Mark a micro artifact as complete')
+  .action(async (name: string, artifact: string, options: MicroCompleteOptions) => {
+    try {
+      await microCompleteCommand(name, artifact, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('reset <name>')
+  .description('Reset all progress for a micro schema')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (name: string, options: MicroResetOptions) => {
+    try {
+      await microResetCommand(name, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('validate <name>')
+  .description('Validate a micro schema for correctness')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string, options: MicroValidateOptions) => {
+    try {
+      await microValidateCommand(name, options);
     } catch (error) {
       console.log();
       ora().fail(`Error: ${(error as Error).message}`);

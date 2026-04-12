@@ -34,6 +34,7 @@ export {
   detectMicroStale,
   type MicroArtifactMeta,
   type MicroMetaFile,
+  type WriteMicroCompleteOptions,
 } from './state.js';
 
 // Instruction loading

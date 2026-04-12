@@ -18,6 +18,7 @@ import type { MicroSchema } from './types.js';
 
 export interface MicroArtifactMeta {
   completed_at: string;
+  dialog_log?: string;
 }
 
 export interface MicroMetaFile {
@@ -55,19 +56,33 @@ export function readMicroMeta(name: string, projectRoot: string): MicroMetaFile 
 }
 
 /**
+ * Options for writeMicroComplete.
+ */
+export interface WriteMicroCompleteOptions {
+  dialogLog?: string;
+}
+
+/**
  * Marks an artifact as complete by writing to the meta file.
  */
 export function writeMicroComplete(
   name: string,
   artifactId: string,
-  projectRoot: string
+  projectRoot: string,
+  options?: WriteMicroCompleteOptions
 ): void {
   const metaPath = getMetaPath(name, projectRoot);
   const existing = readMicroMeta(name, projectRoot);
 
-  existing.artifacts[artifactId] = {
+  const meta: MicroArtifactMeta = {
     completed_at: new Date().toISOString(),
   };
+
+  if (options?.dialogLog) {
+    meta.dialog_log = options.dialogLog;
+  }
+
+  existing.artifacts[artifactId] = meta;
 
   fs.writeFileSync(metaPath, stringifyYaml(existing), 'utf-8');
 }

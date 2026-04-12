@@ -129,6 +129,48 @@ describe('writeMicroComplete', () => {
     const meta = readMetaFile('test');
     expect(meta.artifacts['step-1'].completed_at).not.toBe('2025-01-01T00:00:00');
   });
+
+  it('writes dialog_log when provided', () => {
+    writeMicroComplete('test', 'step-1', tmpDir, {
+      dialogLog: './logs/step-1-dialog.json',
+    });
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].dialog_log).toBe('./logs/step-1-dialog.json');
+    expect(meta.artifacts['step-1'].completed_at).toBeTruthy();
+  });
+
+  it('omits dialog_log when not provided', () => {
+    writeMicroComplete('test', 'step-1', tmpDir);
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].dialog_log).toBeUndefined();
+  });
+
+  it('preserves existing dialog_log of other artifacts', () => {
+    writeMicroComplete('test', 'step-1', tmpDir, {
+      dialogLog: './logs/step-1.json',
+    });
+    writeMicroComplete('test', 'step-2', tmpDir);
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].dialog_log).toBe('./logs/step-1.json');
+    expect(meta.artifacts['step-2'].dialog_log).toBeUndefined();
+  });
+
+  it('reads back dialog_log via readMicroMeta', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': {
+          completed_at: '2025-01-01T00:00:00',
+          dialog_log: './logs/existing.json',
+        },
+      },
+    });
+
+    const meta = readMicroMeta('test', tmpDir);
+    expect(meta.artifacts['step-1'].dialog_log).toBe('./logs/existing.json');
+  });
 });
 
 // ---------------------------------------------------------------------------

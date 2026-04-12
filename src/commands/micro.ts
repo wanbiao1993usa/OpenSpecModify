@@ -50,7 +50,7 @@ export interface MicroInstructionsOptions {
 }
 
 export interface MicroCompleteOptions {
-  // no extra options for now
+  dialogLog?: string;
 }
 
 export interface MicroResetOptions {
@@ -322,7 +322,7 @@ export async function microInstructionsCommand(
 export async function microCompleteCommand(
   name: string,
   artifactId: string,
-  _options: MicroCompleteOptions
+  options: MicroCompleteOptions
 ): Promise<void> {
   const projectRoot = getProjectRoot();
 
@@ -336,8 +336,14 @@ export async function microCompleteCommand(
     );
   }
 
-  writeMicroComplete(name, artifactId, projectRoot);
+  writeMicroComplete(name, artifactId, projectRoot, {
+    dialogLog: options.dialogLog,
+  });
+
   console.log(`Marked '${artifactId}' as complete in micro schema '${name}'.`);
+  if (options.dialogLog) {
+    console.log(`  dialog_log: ${options.dialogLog}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -45,10 +45,12 @@ function writeMetaFile(name: string, meta: MicroMetaFile): void {
 function buildContext(
   schema: MicroSchema,
   completed: string[] = [],
-  stale: string[] = []
+  stale: string[] = [],
+  meta?: MicroMetaFile
 ): MicroContext {
   return {
     schema,
+    meta: meta ?? { artifacts: {} },
     completed: new Set(completed),
     stale: new Set(stale),
     name: schema.name,
@@ -109,6 +111,7 @@ describe('loadMicroContext', () => {
     expect(ctx.completed.has('a')).toBe(true);
     expect(ctx.completed.has('b')).toBe(false);
     expect(ctx.name).toBe('test');
+    expect(ctx.meta.artifacts['a'].completed_at).toBe('2025-01-01T00:00:00');
   });
 
   it('returns empty completed set when no meta file', () => {
@@ -165,6 +168,87 @@ describe('generateMicroInstructions', () => {
     const rightDep = inst.dependencies.find(d => d.id === 'right')!;
     expect(leftDep.done).toBe(true);
     expect(rightDep.done).toBe(false);
+  });
+
+  it('includes dependency dialog_log in instructions', () => {
+    const meta: MicroMetaFile = {
+      artifacts: {
+        a: {
+          completed_at: '2025-01-01T00:00:00',
+          dialog_log: './logs/a-dialog.json',
+          line_start: 1,
+          line_end: 50,
+        },
+      },
+    };
+    const ctx = buildContext(linearSchema, ['a'], [], meta);
+    const inst = generateMicroInstructions(ctx, 'b');
+
+    expect(inst.dependencies[0].dialogLog).toEqual({
+      dialogLog: './logs/a-dialog.json',
+      lineStart: 1,
+      lineEnd: 50,
+    });
+  });
+
+  it('omits dependency dialogLog when not in meta', () => {
+    const meta: MicroMetaFile = {
+      artifacts: {
+        a: { completed_at: '2025-01-01T00:00:00' },
+      },
+    };
+    const ctx = buildContext(linearSchema, ['a'], [], meta);
+    const inst = generateMicroInstructions(ctx, 'b');
+
+    expect(inst.dependencies[0].dialogLog).toBeUndefined();
+  });
+
+  it('includes previousDialogLog when artifact was completed before', () => {
+    const meta: MicroMetaFile = {
+      artifacts: {
+        a: {
+          completed_at: '2025-01-01T00:00:00',
+          dialog_log: './logs/a-dialog.json',
+          line_start: 10,
+          line_end: 100,
+        },
+      },
+    };
+    const ctx = buildContext(linearSchema, ['a'], ['a'], meta);
+    const inst = generateMicroInstructions(ctx, 'a');
+
+    expect(inst.previousDialogLog).toEqual({
+      dialogLog: './logs/a-dialog.json',
+      lineStart: 10,
+      lineEnd: 100,
+    });
+  });
+
+  it('omits previousDialogLog when artifact has no prior dialog', () => {
+    const ctx = buildContext(linearSchema);
+    const inst = generateMicroInstructions(ctx, 'a');
+
+    expect(inst.previousDialogLog).toBeUndefined();
+  });
+
+  it('includes dependency dialogLog with partial line range', () => {
+    const meta: MicroMetaFile = {
+      artifacts: {
+        a: {
+          completed_at: '2025-01-01T00:00:00',
+          dialog_log: './logs/a.json',
+          line_start: 50,
+        },
+      },
+    };
+    const ctx = buildContext(linearSchema, ['a'], [], meta);
+    const inst = generateMicroInstructions(ctx, 'b');
+
+    expect(inst.dependencies[0].dialogLog).toEqual({
+      dialogLog: './logs/a.json',
+      lineStart: 50,
+      lineEnd: undefined,
+    });
   });
 });
 

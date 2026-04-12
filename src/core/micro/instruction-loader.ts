@@ -6,7 +6,7 @@
  */
 
 import { loadMicroSchema } from './resolver.js';
-import { readMicroMeta, detectMicroCompleted, detectMicroStale } from './state.js';
+import { readMicroMeta, detectMicroCompleted, detectMicroStale, type MicroMetaFile } from './state.js';
 import { topologicalSort } from './topo.js';
 import type { MicroSchema } from './types.js';
 
@@ -16,10 +16,18 @@ import type { MicroSchema } from './types.js';
 
 export interface MicroContext {
   schema: MicroSchema;
+  meta: MicroMetaFile;
   completed: Set<string>;
   stale: Set<string>;
   name: string;
   projectRoot: string;
+}
+
+/** Dialog log reference stored in meta. */
+export interface DialogLogRef {
+  dialogLog: string;
+  lineStart?: number;
+  lineEnd?: number;
 }
 
 export interface MicroInstructions {
@@ -35,12 +43,16 @@ export interface MicroInstructions {
   dependencies: MicroDependencyInfo[];
   /** Artifacts unlocked by completing this one */
   unlocks: string[];
+  /** Previous dialog log for this artifact (if it was completed before) */
+  previousDialogLog?: DialogLogRef;
 }
 
 export interface MicroDependencyInfo {
   id: string;
   done: boolean;
   description: string;
+  /** Dialog log of the dependency (if completed and has dialog info) */
+  dialogLog?: DialogLogRef;
 }
 
 export type MicroArtifactStatusType = 'done' | 'stale' | 'ready' | 'blocked';
@@ -71,7 +83,7 @@ export function loadMicroContext(name: string, projectRoot: string): MicroContex
   const completed = detectMicroCompleted(schema, meta);
   const stale = detectMicroStale(schema, meta, completed);
 
-  return { schema, completed, stale, name, projectRoot };
+  return { schema, meta, completed, stale, name, projectRoot };
 }
 
 // ---------------------------------------------------------------------------
@@ -95,14 +107,33 @@ export function generateMicroInstructions(
 
   const dependencies: MicroDependencyInfo[] = artifact.requires.map(id => {
     const dep = context.schema.artifacts.find(a => a.id === id);
-    return {
+    const depMeta = context.meta.artifacts[id];
+    const info: MicroDependencyInfo = {
       id,
       done: context.completed.has(id),
       description: dep?.description ?? '',
     };
+    if (depMeta?.dialog_log) {
+      info.dialogLog = {
+        dialogLog: depMeta.dialog_log,
+        lineStart: depMeta.line_start,
+        lineEnd: depMeta.line_end,
+      };
+    }
+    return info;
   });
 
   const unlocks = getUnlockedArtifacts(context.schema, artifactId);
+
+  // Check if this artifact has a previous dialog log (e.g. re-run scenario)
+  const selfMeta = context.meta.artifacts[artifactId];
+  const previousDialogLog = selfMeta?.dialog_log
+    ? {
+        dialogLog: selfMeta.dialog_log,
+        lineStart: selfMeta.line_start,
+        lineEnd: selfMeta.line_end,
+      }
+    : undefined;
 
   return {
     schemaName: context.schema.name,
@@ -111,6 +142,7 @@ export function generateMicroInstructions(
     description: artifact.description || '',
     dependencies,
     unlocks,
+    previousDialogLog,
   };
 }
 

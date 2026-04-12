@@ -46,6 +46,7 @@ export {
   type MicroContext,
   type MicroInstructions,
   type MicroDependencyInfo,
+  type DialogLogRef,
   type MicroArtifactStatusType,
   type MicroArtifactStatus,
   type MicroStatus,

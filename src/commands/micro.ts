@@ -303,8 +303,24 @@ export async function microInstructionsCommand(
     console.log('Dependencies:');
     for (const dep of instructions.dependencies) {
       const mark = dep.done ? chalk.green('✓') : chalk.red('✗');
-      console.log(`  ${mark} ${dep.id}${dep.description ? ` — ${dep.description}` : ''}`);
+      let line = `  ${mark} ${dep.id}${dep.description ? ` — ${dep.description}` : ''}`;
+      if (dep.dialogLog) {
+        const range = dep.dialogLog.lineStart != null || dep.dialogLog.lineEnd != null
+          ? ` [L${dep.dialogLog.lineStart ?? '?'}–L${dep.dialogLog.lineEnd ?? '?'}]`
+          : '';
+        line += chalk.dim(` (dialog: ${dep.dialogLog.dialogLog}${range})`);
+      }
+      console.log(line);
     }
+    console.log();
+  }
+
+  if (instructions.previousDialogLog) {
+    const prev = instructions.previousDialogLog;
+    const range = prev.lineStart != null || prev.lineEnd != null
+      ? ` [L${prev.lineStart ?? '?'}–L${prev.lineEnd ?? '?'}]`
+      : '';
+    console.log(chalk.dim(`Previous dialog: ${prev.dialogLog}${range}`));
     console.log();
   }
 

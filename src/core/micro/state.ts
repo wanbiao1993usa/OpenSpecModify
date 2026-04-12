@@ -19,6 +19,8 @@ import type { MicroSchema } from './types.js';
 export interface MicroArtifactMeta {
   completed_at: string;
   dialog_log?: string;
+  line_start?: number;
+  line_end?: number;
 }
 
 export interface MicroMetaFile {
@@ -60,6 +62,8 @@ export function readMicroMeta(name: string, projectRoot: string): MicroMetaFile 
  */
 export interface WriteMicroCompleteOptions {
   dialogLog?: string;
+  lineStart?: number;
+  lineEnd?: number;
 }
 
 /**
@@ -80,6 +84,12 @@ export function writeMicroComplete(
 
   if (options?.dialogLog) {
     meta.dialog_log = options.dialogLog;
+  }
+  if (options?.lineStart != null) {
+    meta.line_start = options.lineStart;
+  }
+  if (options?.lineEnd != null) {
+    meta.line_end = options.lineEnd;
   }
 
   existing.artifacts[artifactId] = meta;

@@ -171,6 +171,57 @@ describe('writeMicroComplete', () => {
     const meta = readMicroMeta('test', tmpDir);
     expect(meta.artifacts['step-1'].dialog_log).toBe('./logs/existing.json');
   });
+
+  it('writes line_start and line_end when provided', () => {
+    writeMicroComplete('test', 'step-1', tmpDir, {
+      dialogLog: './logs/dialog.json',
+      lineStart: 100,
+      lineEnd: 250,
+    });
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].line_start).toBe(100);
+    expect(meta.artifacts['step-1'].line_end).toBe(250);
+    expect(meta.artifacts['step-1'].dialog_log).toBe('./logs/dialog.json');
+  });
+
+  it('omits line_start/line_end when not provided', () => {
+    writeMicroComplete('test', 'step-1', tmpDir, {
+      dialogLog: './logs/dialog.json',
+    });
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].line_start).toBeUndefined();
+    expect(meta.artifacts['step-1'].line_end).toBeUndefined();
+  });
+
+  it('allows line_start without line_end', () => {
+    writeMicroComplete('test', 'step-1', tmpDir, {
+      dialogLog: './logs/dialog.json',
+      lineStart: 50,
+    });
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1'].line_start).toBe(50);
+    expect(meta.artifacts['step-1'].line_end).toBeUndefined();
+  });
+
+  it('reads back line_start/line_end via readMicroMeta', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': {
+          completed_at: '2025-01-01T00:00:00',
+          dialog_log: './logs/existing.json',
+          line_start: 10,
+          line_end: 200,
+        },
+      },
+    });
+
+    const meta = readMicroMeta('test', tmpDir);
+    expect(meta.artifacts['step-1'].line_start).toBe(10);
+    expect(meta.artifacts['step-1'].line_end).toBe(200);
+  });
 });
 
 // ---------------------------------------------------------------------------

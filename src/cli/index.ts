@@ -674,6 +674,8 @@ microCmd
   .command('complete <name> <artifact>')
   .description('Mark a micro artifact as complete')
   .option('--dialog-log <path>', 'Path to the agent dialog log file')
+  .option('--line-start <number>', 'Start line in dialog log for this artifact')
+  .option('--line-end <number>', 'End line in dialog log for this artifact')
   .action(async (name: string, artifact: string, options: MicroCompleteOptions) => {
     try {
       await microCompleteCommand(name, artifact, options);

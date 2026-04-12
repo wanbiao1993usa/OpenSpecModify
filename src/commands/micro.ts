@@ -51,6 +51,8 @@ export interface MicroInstructionsOptions {
 
 export interface MicroCompleteOptions {
   dialogLog?: string;
+  lineStart?: string;
+  lineEnd?: string;
 }
 
 export interface MicroResetOptions {
@@ -336,13 +338,21 @@ export async function microCompleteCommand(
     );
   }
 
+  const lineStart = options.lineStart != null ? parseInt(options.lineStart, 10) : undefined;
+  const lineEnd = options.lineEnd != null ? parseInt(options.lineEnd, 10) : undefined;
+
   writeMicroComplete(name, artifactId, projectRoot, {
     dialogLog: options.dialogLog,
+    lineStart,
+    lineEnd,
   });
 
   console.log(`Marked '${artifactId}' as complete in micro schema '${name}'.`);
   if (options.dialogLog) {
-    console.log(`  dialog_log: ${options.dialogLog}`);
+    const range = lineStart != null || lineEnd != null
+      ? ` [L${lineStart ?? '?'}–L${lineEnd ?? '?'}]`
+      : '';
+    console.log(`  dialog_log: ${options.dialogLog}${range}`);
   }
 }
 

@@ -23,12 +23,19 @@ export { detectCompleted, detectStale, getArtifactMtime } from './state.js';
 export {
   resolveSchema,
   listSchemas,
+  listBlueprintSchemas,
+  listAllSchemas,
   listSchemasWithInfo,
   getSchemaDir,
   getPackageSchemasDir,
+  getPackageBlueprintsSchemasDir,
   getUserSchemasDir,
+  getUserBlueprintsSchemasDir,
+  getProjectSchemasDir,
+  getProjectBlueprintsSchemasDir,
   SchemaLoadError,
   type SchemaInfo,
+  type SchemaSource,
 } from './resolver.js';
 
 // Instruction loading

@@ -519,6 +519,8 @@ program
   .command('schemas')
   .description('List available workflow schemas with descriptions')
   .option('--json', 'Output as JSON (for agent use)')
+  .option('--blueprints', 'Show only blueprint schemas')
+  .option('--schemas-only', 'Show only non-blueprint schemas')
   .action(async (options: SchemasOptions) => {
     try {
       await schemasCommand(options);
@@ -615,6 +617,7 @@ microCmd
   .command('list')
   .description('List all micro schemas')
   .option('--json', 'Output as JSON')
+  .option('--blueprints', 'Show only blueprint schemas')
   .action(async (options: MicroListOptions) => {
     try {
       await microListCommand(options);

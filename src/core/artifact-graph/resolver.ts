@@ -19,30 +19,53 @@ export class SchemaLoadError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Source type
+// ---------------------------------------------------------------------------
+
 /**
- * Gets the package's built-in schemas directory path.
- * Uses import.meta.url to resolve relative to the current module.
+ * Source indicating where a schema was resolved from.
  */
+export type SchemaSource =
+  | 'project'
+  | 'project-blueprint'
+  | 'user'
+  | 'user-blueprint'
+  | 'package'
+  | 'package-blueprint';
+
+// ---------------------------------------------------------------------------
+// Directory path helpers — schemas
+// ---------------------------------------------------------------------------
+
 export function getPackageSchemasDir(): string {
   const currentFile = fileURLToPath(import.meta.url);
-  // Navigate from dist/core/artifact-graph/ to package root's schemas/
   return path.join(path.dirname(currentFile), '..', '..', '..', 'schemas');
 }
 
-/**
- * Gets the user's schema override directory path.
- */
 export function getUserSchemasDir(): string {
   return path.join(getGlobalDataDir(), 'schemas');
 }
 
-/**
- * Gets the project-local schemas directory path.
- * @param projectRoot - The project root directory
- * @returns The path to the project's schemas directory
- */
 export function getProjectSchemasDir(projectRoot: string): string {
   return path.join(projectRoot, 'openspec', 'schemas');
+}
+
+// ---------------------------------------------------------------------------
+// Directory path helpers — blueprints
+// ---------------------------------------------------------------------------
+
+export function getPackageBlueprintsSchemasDir(): string {
+  const currentFile = fileURLToPath(import.meta.url);
+  return path.join(path.dirname(currentFile), '..', '..', '..', 'blueprints', 'schemas');
+}
+
+export function getUserBlueprintsSchemasDir(): string {
+  return path.join(getGlobalDataDir(), 'blueprints', 'schemas');
+}
+
+export function getProjectBlueprintsSchemasDir(projectRoot: string): string {
+  return path.join(projectRoot, 'openspec', 'blueprints', 'schemas');
 }
 
 /**
@@ -64,27 +87,40 @@ export function getSchemaDir(
   name: string,
   projectRoot?: string
 ): string | null {
-  // 1. Check project-local directory (if projectRoot provided)
+  // 1. Project schemas
   if (projectRoot) {
-    const projectDir = path.join(getProjectSchemasDir(projectRoot), name);
-    const projectSchemaPath = path.join(projectDir, 'schema.yaml');
-    if (fs.existsSync(projectSchemaPath)) {
-      return projectDir;
-    }
+    const dir = path.join(getProjectSchemasDir(projectRoot), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
   }
 
-  // 2. Check user override directory
-  const userDir = path.join(getUserSchemasDir(), name);
-  const userSchemaPath = path.join(userDir, 'schema.yaml');
-  if (fs.existsSync(userSchemaPath)) {
-    return userDir;
+  // 2. Project blueprints
+  if (projectRoot) {
+    const dir = path.join(getProjectBlueprintsSchemasDir(projectRoot), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
   }
 
-  // 3. Check package built-in directory
-  const packageDir = path.join(getPackageSchemasDir(), name);
-  const packageSchemaPath = path.join(packageDir, 'schema.yaml');
-  if (fs.existsSync(packageSchemaPath)) {
-    return packageDir;
+  // 3. User schemas
+  {
+    const dir = path.join(getUserSchemasDir(), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
+  }
+
+  // 4. User blueprints
+  {
+    const dir = path.join(getUserBlueprintsSchemasDir(), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
+  }
+
+  // 5. Package schemas
+  {
+    const dir = path.join(getPackageSchemasDir(), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
+  }
+
+  // 6. Package blueprints
+  {
+    const dir = path.join(getPackageBlueprintsSchemasDir(), name);
+    if (fs.existsSync(path.join(dir, 'schema.yaml'))) return dir;
   }
 
   return null;
@@ -112,7 +148,7 @@ export function resolveSchema(name: string, projectRoot?: string): SchemaYaml {
 
   const schemaDir = getSchemaDir(normalizedName, projectRoot);
   if (!schemaDir) {
-    const availableSchemas = listSchemas(projectRoot);
+    const availableSchemas = listAllSchemas(projectRoot);
     throw new Error(
       `Schema '${normalizedName}' not found. Available schemas: ${availableSchemas.join(', ')}`
     );
@@ -152,151 +188,133 @@ export function resolveSchema(name: string, projectRoot?: string): SchemaYaml {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/** Scan a directory for subdirectories that contain schema.yaml */
+function scanSchemaDir(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'schema.yaml')))
+    .map(e => e.name);
+}
+
+/** Collect all non-blueprint schema directories (project → user → package) */
+function collectSchemaDirs(projectRoot?: string): Array<{ dir: string; source: SchemaSource }> {
+  const dirs: Array<{ dir: string; source: SchemaSource }> = [];
+  if (projectRoot) dirs.push({ dir: getProjectSchemasDir(projectRoot), source: 'project' });
+  dirs.push({ dir: getUserSchemasDir(), source: 'user' });
+  dirs.push({ dir: getPackageSchemasDir(), source: 'package' });
+  return dirs;
+}
+
+/** Collect all blueprint schema directories (project → user → package) */
+function collectBlueprintDirs(projectRoot?: string): Array<{ dir: string; source: SchemaSource }> {
+  const dirs: Array<{ dir: string; source: SchemaSource }> = [];
+  if (projectRoot) dirs.push({ dir: getProjectBlueprintsSchemasDir(projectRoot), source: 'project-blueprint' });
+  dirs.push({ dir: getUserBlueprintsSchemasDir(), source: 'user-blueprint' });
+  dirs.push({ dir: getPackageBlueprintsSchemasDir(), source: 'package-blueprint' });
+  return dirs;
+}
+
+// ---------------------------------------------------------------------------
+// Listing functions
+// ---------------------------------------------------------------------------
+
 /**
- * Lists all available schema names.
- * Combines project-local, user override, and package built-in schemas.
- *
- * @param projectRoot - Optional project root directory for project-local schema resolution
+ * Lists schema names from non-blueprint directories only.
  */
 export function listSchemas(projectRoot?: string): string[] {
-  const schemas = new Set<string>();
-
-  // Add package built-in schemas
-  const packageDir = getPackageSchemasDir();
-  if (fs.existsSync(packageDir)) {
-    for (const entry of fs.readdirSync(packageDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        const schemaPath = path.join(packageDir, entry.name, 'schema.yaml');
-        if (fs.existsSync(schemaPath)) {
-          schemas.add(entry.name);
-        }
-      }
-    }
+  const names = new Set<string>();
+  for (const { dir } of collectSchemaDirs(projectRoot)) {
+    for (const name of scanSchemaDir(dir)) names.add(name);
   }
-
-  // Add user override schemas (may override package schemas)
-  const userDir = getUserSchemasDir();
-  if (fs.existsSync(userDir)) {
-    for (const entry of fs.readdirSync(userDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        const schemaPath = path.join(userDir, entry.name, 'schema.yaml');
-        if (fs.existsSync(schemaPath)) {
-          schemas.add(entry.name);
-        }
-      }
-    }
-  }
-
-  // Add project-local schemas (if projectRoot provided)
-  if (projectRoot) {
-    const projectDir = getProjectSchemasDir(projectRoot);
-    if (fs.existsSync(projectDir)) {
-      for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          const schemaPath = path.join(projectDir, entry.name, 'schema.yaml');
-          if (fs.existsSync(schemaPath)) {
-            schemas.add(entry.name);
-          }
-        }
-      }
-    }
-  }
-
-  return Array.from(schemas).sort();
+  return [...names].sort();
 }
 
 /**
- * Schema info with metadata (name, description, artifacts).
+ * Lists schema names from blueprint directories only.
+ */
+export function listBlueprintSchemas(projectRoot?: string): string[] {
+  const names = new Set<string>();
+  for (const { dir } of collectBlueprintDirs(projectRoot)) {
+    for (const name of scanSchemaDir(dir)) names.add(name);
+  }
+  return [...names].sort();
+}
+
+/**
+ * Lists all schema names from both schemas and blueprints directories.
+ */
+export function listAllSchemas(projectRoot?: string): string[] {
+  const names = new Set<string>();
+  for (const { dir } of [...collectSchemaDirs(projectRoot), ...collectBlueprintDirs(projectRoot)]) {
+    for (const name of scanSchemaDir(dir)) names.add(name);
+  }
+  return [...names].sort();
+}
+
+/**
+ * Schema info with metadata (name, description, artifacts, source).
  */
 export interface SchemaInfo {
   name: string;
   description: string;
   artifacts: string[];
-  source: 'project' | 'user' | 'package';
+  source: SchemaSource;
 }
 
 /**
- * Lists all available schemas with their descriptions and artifact lists.
- * Useful for agent skills to present schema selection to users.
- *
- * @param projectRoot - Optional project root directory for project-local schema resolution
+ * Scan a single directory and produce SchemaInfo entries for unseen names.
+ */
+function scanSchemasWithInfo(
+  dir: string,
+  source: SchemaSource,
+  seenNames: Set<string>,
+  results: SchemaInfo[]
+): void {
+  for (const name of scanSchemaDir(dir)) {
+    if (seenNames.has(name)) continue;
+    const schemaPath = path.join(dir, name, 'schema.yaml');
+    try {
+      const schema = parseSchema(fs.readFileSync(schemaPath, 'utf-8'));
+      results.push({
+        name,
+        description: schema.description || '',
+        artifacts: schema.artifacts.map(a => a.id),
+        source,
+      });
+      seenNames.add(name);
+    } catch {
+      // Skip invalid schemas
+    }
+  }
+}
+
+/**
+ * Lists all available schemas with metadata, respecting resolution priority.
+ * Order: project → project-blueprint → user → user-blueprint → package → package-blueprint.
  */
 export function listSchemasWithInfo(projectRoot?: string): SchemaInfo[] {
-  const schemas: SchemaInfo[] = [];
+  const results: SchemaInfo[] = [];
   const seenNames = new Set<string>();
 
-  // Add project-local schemas first (highest priority, if projectRoot provided)
-  if (projectRoot) {
-    const projectDir = getProjectSchemasDir(projectRoot);
-    if (fs.existsSync(projectDir)) {
-      for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          const schemaPath = path.join(projectDir, entry.name, 'schema.yaml');
-          if (fs.existsSync(schemaPath)) {
-            try {
-              const schema = parseSchema(fs.readFileSync(schemaPath, 'utf-8'));
-              schemas.push({
-                name: entry.name,
-                description: schema.description || '',
-                artifacts: schema.artifacts.map((a) => a.id),
-                source: 'project',
-              });
-              seenNames.add(entry.name);
-            } catch {
-              // Skip invalid schemas
-            }
-          }
-        }
-      }
-    }
+  // Interleave schemas and blueprints at each level
+  const allDirs = [
+    ...( projectRoot ? [
+      { dir: getProjectSchemasDir(projectRoot), source: 'project' as SchemaSource },
+      { dir: getProjectBlueprintsSchemasDir(projectRoot), source: 'project-blueprint' as SchemaSource },
+    ] : []),
+    { dir: getUserSchemasDir(), source: 'user' as SchemaSource },
+    { dir: getUserBlueprintsSchemasDir(), source: 'user-blueprint' as SchemaSource },
+    { dir: getPackageSchemasDir(), source: 'package' as SchemaSource },
+    { dir: getPackageBlueprintsSchemasDir(), source: 'package-blueprint' as SchemaSource },
+  ];
+
+  for (const { dir, source } of allDirs) {
+    scanSchemasWithInfo(dir, source, seenNames, results);
   }
 
-  // Add user override schemas (if not overridden by project)
-  const userDir = getUserSchemasDir();
-  if (fs.existsSync(userDir)) {
-    for (const entry of fs.readdirSync(userDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !seenNames.has(entry.name)) {
-        const schemaPath = path.join(userDir, entry.name, 'schema.yaml');
-        if (fs.existsSync(schemaPath)) {
-          try {
-            const schema = parseSchema(fs.readFileSync(schemaPath, 'utf-8'));
-            schemas.push({
-              name: entry.name,
-              description: schema.description || '',
-              artifacts: schema.artifacts.map((a) => a.id),
-              source: 'user',
-            });
-            seenNames.add(entry.name);
-          } catch {
-            // Skip invalid schemas
-          }
-        }
-      }
-    }
-  }
-
-  // Add package built-in schemas (if not overridden by project or user)
-  const packageDir = getPackageSchemasDir();
-  if (fs.existsSync(packageDir)) {
-    for (const entry of fs.readdirSync(packageDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !seenNames.has(entry.name)) {
-        const schemaPath = path.join(packageDir, entry.name, 'schema.yaml');
-        if (fs.existsSync(schemaPath)) {
-          try {
-            const schema = parseSchema(fs.readFileSync(schemaPath, 'utf-8'));
-            schemas.push({
-              name: entry.name,
-              description: schema.description || '',
-              artifacts: schema.artifacts.map((a) => a.id),
-              source: 'package',
-            });
-          } catch {
-            // Skip invalid schemas
-          }
-        }
-      }
-    }
-  }
-
-  return schemas.sort((a, b) => a.name.localeCompare(b.name));
+  return results.sort((a, b) => a.name.localeCompare(b.name));
 }

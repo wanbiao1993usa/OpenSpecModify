@@ -6,9 +6,12 @@ import { stringify as stringifyYaml } from 'yaml';
 import {
   getSchemaDir,
   getProjectSchemasDir,
+  getProjectBlueprintsSchemasDir,
   getUserSchemasDir,
+  getUserBlueprintsSchemasDir,
   getPackageSchemasDir,
-  listSchemas,
+  getPackageBlueprintsSchemasDir,
+  listAllSchemas,
 } from '../core/artifact-graph/resolver.js';
 import { parseSchema, SchemaValidationError } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml, Artifact } from '../core/artifact-graph/types.js';
@@ -16,7 +19,13 @@ import type { SchemaYaml, Artifact } from '../core/artifact-graph/types.js';
 /**
  * Schema source location type
  */
-type SchemaSource = 'project' | 'user' | 'package';
+type SchemaSource =
+  | 'project'
+  | 'project-blueprint'
+  | 'user'
+  | 'user-blueprint'
+  | 'package'
+  | 'package-blueprint';
 
 /**
  * Result of checking a schema location
@@ -53,36 +62,20 @@ function checkAllLocations(
   name: string,
   projectRoot: string
 ): SchemaLocation[] {
-  const locations: SchemaLocation[] = [];
+  const pairs: Array<{ source: SchemaSource; dir: string }> = [
+    { source: 'project', dir: path.join(getProjectSchemasDir(projectRoot), name) },
+    { source: 'project-blueprint', dir: path.join(getProjectBlueprintsSchemasDir(projectRoot), name) },
+    { source: 'user', dir: path.join(getUserSchemasDir(), name) },
+    { source: 'user-blueprint', dir: path.join(getUserBlueprintsSchemasDir(), name) },
+    { source: 'package', dir: path.join(getPackageSchemasDir(), name) },
+    { source: 'package-blueprint', dir: path.join(getPackageBlueprintsSchemasDir(), name) },
+  ];
 
-  // Project location
-  const projectDir = path.join(getProjectSchemasDir(projectRoot), name);
-  const projectSchemaPath = path.join(projectDir, 'schema.yaml');
-  locations.push({
-    source: 'project',
-    path: projectDir,
-    exists: fs.existsSync(projectSchemaPath),
-  });
-
-  // User location
-  const userDir = path.join(getUserSchemasDir(), name);
-  const userSchemaPath = path.join(userDir, 'schema.yaml');
-  locations.push({
-    source: 'user',
-    path: userDir,
-    exists: fs.existsSync(userSchemaPath),
-  });
-
-  // Package location
-  const packageDir = path.join(getPackageSchemasDir(), name);
-  const packageSchemaPath = path.join(packageDir, 'schema.yaml');
-  locations.push({
-    source: 'package',
-    path: packageDir,
-    exists: fs.existsSync(packageSchemaPath),
-  });
-
-  return locations;
+  return pairs.map(({ source, dir }) => ({
+    source,
+    path: dir,
+    exists: fs.existsSync(path.join(dir, 'schema.yaml')),
+  }));
 }
 
 /**
@@ -119,7 +112,7 @@ function getSchemaResolution(
 function getAllSchemasWithResolution(
   projectRoot: string
 ): SchemaResolution[] {
-  const schemaNames = listSchemas(projectRoot);
+  const schemaNames = listAllSchemas(projectRoot);
   const results: SchemaResolution[] = [];
 
   for (const name of schemaNames) {
@@ -333,37 +326,25 @@ export function registerSchemaCommand(program: Command): void {
               return;
             }
 
-            // Group by source
-            const bySource = {
-              project: schemas.filter((s) => s.source === 'project'),
-              user: schemas.filter((s) => s.source === 'user'),
-              package: schemas.filter((s) => s.source === 'package'),
-            };
+            const sourceGroups: Array<{ label: string; source: SchemaSource }> = [
+              { label: 'Project schemas', source: 'project' },
+              { label: 'Project blueprints', source: 'project-blueprint' },
+              { label: 'User schemas', source: 'user' },
+              { label: 'User blueprints', source: 'user-blueprint' },
+              { label: 'Package schemas', source: 'package' },
+              { label: 'Package blueprints', source: 'package-blueprint' },
+            ];
 
-            if (bySource.project.length > 0) {
-              console.log('\nProject schemas:');
-              for (const schema of bySource.project) {
-                const shadowInfo = schema.shadows.length > 0
-                  ? ` (shadows: ${schema.shadows.map((s) => s.source).join(', ')})`
-                  : '';
-                console.log(`  ${schema.name}${shadowInfo}`);
-              }
-            }
-
-            if (bySource.user.length > 0) {
-              console.log('\nUser schemas:');
-              for (const schema of bySource.user) {
-                const shadowInfo = schema.shadows.length > 0
-                  ? ` (shadows: ${schema.shadows.map((s) => s.source).join(', ')})`
-                  : '';
-                console.log(`  ${schema.name}${shadowInfo}`);
-              }
-            }
-
-            if (bySource.package.length > 0) {
-              console.log('\nPackage schemas:');
-              for (const schema of bySource.package) {
-                console.log(`  ${schema.name}`);
+            for (const group of sourceGroups) {
+              const groupSchemas = schemas.filter((s) => s.source === group.source);
+              if (groupSchemas.length > 0) {
+                console.log(`\n${group.label}:`);
+                for (const schema of groupSchemas) {
+                  const shadowInfo = schema.shadows.length > 0
+                    ? ` (shadows: ${schema.shadows.map((s) => s.source).join(', ')})`
+                    : '';
+                  console.log(`  ${schema.name}${shadowInfo}`);
+                }
               }
             }
           }
@@ -379,7 +360,7 @@ export function registerSchemaCommand(program: Command): void {
         const resolution = getSchemaResolution(name, projectRoot);
 
         if (!resolution) {
-          const available = listSchemas(projectRoot);
+          const available = listAllSchemas(projectRoot);
           if (options?.json) {
             console.log(JSON.stringify({
               error: `Schema '${name}' not found`,
@@ -506,7 +487,7 @@ export function registerSchemaCommand(program: Command): void {
         const schemaDir = getSchemaDir(name, projectRoot);
 
         if (!schemaDir) {
-          const available = listSchemas(projectRoot);
+          const available = listAllSchemas(projectRoot);
           if (options?.json) {
             console.log(JSON.stringify({
               valid: false,
@@ -589,7 +570,7 @@ export function registerSchemaCommand(program: Command): void {
         // Find source schema
         const sourceDir = getSchemaDir(source, projectRoot);
         if (!sourceDir) {
-          const available = listSchemas(projectRoot);
+          const available = listAllSchemas(projectRoot);
           if (options?.json) {
             console.log(JSON.stringify({
               forked: false,

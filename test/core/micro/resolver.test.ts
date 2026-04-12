@@ -11,7 +11,11 @@ import {
   parseMicroSchema,
   loadMicroSchema,
   listMicroSchemas,
+  listMicroBlueprints,
+  listAllMicroSchemas,
+  listMicroSchemasWithInfo,
   getMicroDir,
+  getMicroBlueprintsDir,
   MicroSchemaValidationError,
   validateMicroName,
 } from '../../../src/core/micro/resolver.js';
@@ -31,6 +35,12 @@ function writeMicroSchema(projectRoot: string, name: string, content: object): v
   const microDir = getMicroDir(projectRoot);
   fs.mkdirSync(microDir, { recursive: true });
   fs.writeFileSync(path.join(microDir, `${name}.yaml`), stringifyYaml(content), 'utf-8');
+}
+
+function writeMicroBlueprint(projectRoot: string, name: string, content: object): void {
+  const bpDir = getMicroBlueprintsDir(projectRoot);
+  fs.mkdirSync(bpDir, { recursive: true });
+  fs.writeFileSync(path.join(bpDir, `${name}.yaml`), stringifyYaml(content), 'utf-8');
 }
 
 beforeEach(() => {
@@ -209,5 +219,150 @@ describe('validateMicroName', () => {
   it('rejects names with spaces or special chars', () => {
     expect(validateMicroName('my schema').valid).toBe(false);
     expect(validateMicroName('my@schema').valid).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMicroBlueprintsDir
+// ---------------------------------------------------------------------------
+
+describe('getMicroBlueprintsDir', () => {
+  it('returns openspec/blueprints/micro under project root', () => {
+    expect(getMicroBlueprintsDir('/project')).toBe(path.join('/project', 'openspec', 'blueprints', 'micro'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blueprint loading
+// ---------------------------------------------------------------------------
+
+describe('loadMicroSchema with blueprints', () => {
+  it('loads from blueprints when not in micro dir', () => {
+    writeMicroBlueprint(tmpDir, 'curated-plan', {
+      name: 'curated-plan',
+      version: 1,
+      artifacts: [{ id: 'step1', instruction: 'First step' }],
+    });
+
+    const schema = loadMicroSchema('curated-plan', tmpDir);
+    expect(schema.name).toBe('curated-plan');
+    expect(schema.artifacts).toHaveLength(1);
+  });
+
+  it('prefers micro dir over blueprints dir', () => {
+    writeMicroSchema(tmpDir, 'shared-plan', {
+      name: 'shared-plan-schema',
+      version: 2,
+      artifacts: [{ id: 'a', instruction: 'Schema version' }],
+    });
+    writeMicroBlueprint(tmpDir, 'shared-plan', {
+      name: 'shared-plan-bp',
+      version: 1,
+      artifacts: [{ id: 'b', instruction: 'Blueprint version' }],
+    });
+
+    const schema = loadMicroSchema('shared-plan', tmpDir);
+    expect(schema.name).toBe('shared-plan-schema');
+    expect(schema.version).toBe(2);
+  });
+
+  it('shows all available schemas in error message', () => {
+    writeMicroSchema(tmpDir, 'plan-a', {
+      name: 'plan-a', version: 1, artifacts: [{ id: 'x', instruction: 'X' }],
+    });
+    writeMicroBlueprint(tmpDir, 'plan-b', {
+      name: 'plan-b', version: 1, artifacts: [{ id: 'y', instruction: 'Y' }],
+    });
+
+    try {
+      loadMicroSchema('nonexistent', tmpDir);
+      expect.fail('Should have thrown');
+    } catch (e) {
+      const error = e as Error;
+      expect(error.message).toContain('plan-a');
+      expect(error.message).toContain('plan-b');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blueprint listing
+// ---------------------------------------------------------------------------
+
+describe('listMicroBlueprints', () => {
+  it('returns empty when no blueprints directory exists', () => {
+    expect(listMicroBlueprints(tmpDir)).toEqual([]);
+  });
+
+  it('lists only blueprint schemas', () => {
+    writeMicroBlueprint(tmpDir, 'curated-a', {
+      name: 'curated-a', version: 1, artifacts: [{ id: 'a', instruction: 'A' }],
+    });
+    writeMicroSchema(tmpDir, 'regular-b', {
+      name: 'regular-b', version: 1, artifacts: [{ id: 'b', instruction: 'B' }],
+    });
+
+    const blueprints = listMicroBlueprints(tmpDir);
+    expect(blueprints).toEqual(['curated-a']);
+  });
+});
+
+describe('listAllMicroSchemas', () => {
+  it('includes both micro and blueprint schemas', () => {
+    writeMicroSchema(tmpDir, 'regular', {
+      name: 'regular', version: 1, artifacts: [{ id: 'a', instruction: 'A' }],
+    });
+    writeMicroBlueprint(tmpDir, 'curated', {
+      name: 'curated', version: 1, artifacts: [{ id: 'b', instruction: 'B' }],
+    });
+
+    const all = listAllMicroSchemas(tmpDir);
+    expect(all).toContain('regular');
+    expect(all).toContain('curated');
+  });
+
+  it('deduplicates same-name schemas', () => {
+    writeMicroSchema(tmpDir, 'shared', {
+      name: 'shared', version: 1, artifacts: [{ id: 'a', instruction: 'A' }],
+    });
+    writeMicroBlueprint(tmpDir, 'shared', {
+      name: 'shared', version: 1, artifacts: [{ id: 'a', instruction: 'A' }],
+    });
+
+    expect(listAllMicroSchemas(tmpDir).filter(s => s === 'shared').length).toBe(1);
+  });
+});
+
+describe('listMicroSchemasWithInfo', () => {
+  it('returns correct source for micro vs blueprint schemas', () => {
+    writeMicroSchema(tmpDir, 'regular', {
+      name: 'regular', version: 1, artifacts: [{ id: 'a', instruction: 'A' }],
+    });
+    writeMicroBlueprint(tmpDir, 'curated', {
+      name: 'curated', version: 1, artifacts: [{ id: 'b', instruction: 'B' }, { id: 'c', instruction: 'C' }],
+    });
+
+    const infos = listMicroSchemasWithInfo(tmpDir);
+    const regular = infos.find(i => i.name === 'regular');
+    const curated = infos.find(i => i.name === 'curated');
+
+    expect(regular!.source).toBe('project');
+    expect(regular!.artifactCount).toBe(1);
+    expect(curated!.source).toBe('project-blueprint');
+    expect(curated!.artifactCount).toBe(2);
+  });
+
+  it('shadows blueprint with same-name micro schema', () => {
+    writeMicroSchema(tmpDir, 'shared', {
+      name: 'shared-schema', version: 2, artifacts: [{ id: 'a', instruction: 'Schema' }],
+    });
+    writeMicroBlueprint(tmpDir, 'shared', {
+      name: 'shared-bp', version: 1, artifacts: [{ id: 'b', instruction: 'BP' }, { id: 'c', instruction: 'C' }],
+    });
+
+    const infos = listMicroSchemasWithInfo(tmpDir);
+    const shared = infos.find(i => i.name === 'shared');
+    expect(shared!.source).toBe('project');
+    expect(shared!.artifactCount).toBe(1);
   });
 });

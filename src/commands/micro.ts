@@ -11,6 +11,8 @@ import chalk from 'chalk';
 import { stringify as stringifyYaml } from 'yaml';
 import {
   listMicroSchemas,
+  listMicroBlueprints,
+  listMicroSchemasWithInfo,
   loadMicroSchema,
   parseMicroSchema,
   getMicroDir,
@@ -32,6 +34,7 @@ import {
 
 export interface MicroListOptions {
   json?: boolean;
+  blueprints?: boolean;
 }
 
 export interface MicroNewOptions {
@@ -85,26 +88,51 @@ function getMicroStatusIndicator(status: MicroArtifactStatus['status']): string 
 
 export async function microListCommand(options: MicroListOptions): Promise<void> {
   const projectRoot = getProjectRoot();
-  const schemas = listMicroSchemas(projectRoot);
 
-  if (options.json) {
-    console.log(JSON.stringify({ schemas }, null, 2));
+  if (options.blueprints) {
+    const schemas = listMicroBlueprints(projectRoot);
+    if (options.json) {
+      console.log(JSON.stringify({ schemas }, null, 2));
+      return;
+    }
+    if (schemas.length === 0) {
+      console.log('No micro blueprint schemas found.');
+      return;
+    }
+    console.log(`Micro blueprints (${schemas.length}):`);
+    for (const name of schemas) {
+      try {
+        const schema = loadMicroSchema(name, projectRoot);
+        const desc = schema.description ? ` — ${schema.description}` : '';
+        console.log(`  ${name} (${schema.artifacts.length} artifacts)${desc}`);
+      } catch {
+        console.log(`  ${name} (invalid schema)`);
+      }
+    }
     return;
   }
 
-  if (schemas.length === 0) {
+  const schemasWithInfo = listMicroSchemasWithInfo(projectRoot);
+
+  if (options.json) {
+    console.log(JSON.stringify({ schemas: schemasWithInfo }, null, 2));
+    return;
+  }
+
+  if (schemasWithInfo.length === 0) {
     console.log('No micro schemas found. Create one with: openspec micro new <name>');
     return;
   }
 
-  console.log(`Micro schemas (${schemas.length}):`);
-  for (const name of schemas) {
+  console.log(`Micro schemas (${schemasWithInfo.length}):`);
+  for (const info of schemasWithInfo) {
     try {
-      const schema = loadMicroSchema(name, projectRoot);
+      const schema = loadMicroSchema(info.name, projectRoot);
       const desc = schema.description ? ` — ${schema.description}` : '';
-      console.log(`  ${name} (${schema.artifacts.length} artifacts)${desc}`);
+      const sourceLabel = info.source === 'project-blueprint' ? chalk.cyan(' [blueprint]') : '';
+      console.log(`  ${info.name} (${info.artifactCount} artifacts)${desc}${sourceLabel}`);
     } catch {
-      console.log(`  ${name} (invalid schema)`);
+      console.log(`  ${info.name} (invalid schema)`);
     }
   }
 }

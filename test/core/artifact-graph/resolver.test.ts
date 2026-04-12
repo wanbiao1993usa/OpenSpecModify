@@ -5,12 +5,17 @@ import * as os from 'node:os';
 import {
   resolveSchema,
   listSchemas,
+  listBlueprintSchemas,
+  listAllSchemas,
   listSchemasWithInfo,
   SchemaLoadError,
   getSchemaDir,
   getPackageSchemasDir,
+  getPackageBlueprintsSchemasDir,
   getUserSchemasDir,
+  getUserBlueprintsSchemasDir,
   getProjectSchemasDir,
+  getProjectBlueprintsSchemasDir,
 } from '../../../src/core/artifact-graph/resolver.js';
 
 describe('artifact-graph/resolver', () => {
@@ -657,6 +662,178 @@ artifacts:
       expect(sharedSchema).toBeDefined();
       expect(sharedSchema!.source).toBe('project');
       expect(sharedSchema!.description).toBe('Project shared'); // project version wins
+    });
+  });
+
+  // =========================================================================
+  // Blueprints tests
+  // =========================================================================
+
+  describe('blueprint directory helpers', () => {
+    it('getProjectBlueprintsSchemasDir returns correct path', () => {
+      const dir = getProjectBlueprintsSchemasDir('/my/project');
+      expect(dir).toBe(path.join('/my/project', 'openspec', 'blueprints', 'schemas'));
+    });
+
+    it('getUserBlueprintsSchemasDir uses XDG_DATA_HOME', () => {
+      process.env.XDG_DATA_HOME = tempDir;
+      const dir = getUserBlueprintsSchemasDir();
+      expect(dir).toBe(path.join(tempDir, 'openspec', 'blueprints', 'schemas'));
+    });
+
+    it('getPackageBlueprintsSchemasDir returns a valid path', () => {
+      const dir = getPackageBlueprintsSchemasDir();
+      expect(typeof dir).toBe('string');
+      expect(dir).toContain('blueprints');
+    });
+  });
+
+  describe('getSchemaDir with blueprints', () => {
+    it('should resolve project blueprint when no project schema exists', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'reviewed-flow');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: reviewed-flow\nversion: 1\nartifacts: []');
+
+      const dir = getSchemaDir('reviewed-flow', projectRoot);
+      expect(dir).toBe(bpDir);
+    });
+
+    it('should prefer project schema over project blueprint', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'my-flow');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: bp\nversion: 1\nartifacts: []');
+
+      const schemaDir = path.join(projectRoot, 'openspec', 'schemas', 'my-flow');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'), 'name: schema\nversion: 2\nartifacts: []');
+
+      const dir = getSchemaDir('my-flow', projectRoot);
+      expect(dir).toBe(schemaDir);
+    });
+
+    it('should resolve user blueprint when no user schema exists', () => {
+      process.env.XDG_DATA_HOME = tempDir;
+      const bpDir = path.join(tempDir, 'openspec', 'blueprints', 'schemas', 'curated-flow');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: curated\nversion: 1\nartifacts: []');
+
+      const dir = getSchemaDir('curated-flow');
+      expect(dir).toBe(bpDir);
+    });
+
+    it('should prefer user schema over user blueprint', () => {
+      process.env.XDG_DATA_HOME = tempDir;
+      const bpDir = path.join(tempDir, 'openspec', 'blueprints', 'schemas', 'my-flow');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: bp\nversion: 1\nartifacts: []');
+
+      const schemaDir = path.join(tempDir, 'openspec', 'schemas', 'my-flow');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'), 'name: schema\nversion: 2\nartifacts: []');
+
+      const dir = getSchemaDir('my-flow');
+      expect(dir).toBe(schemaDir);
+    });
+  });
+
+  describe('listBlueprintSchemas', () => {
+    it('should list only blueprint schemas', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'reviewed');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: reviewed\nversion: 1\nartifacts: []');
+
+      const schemaDir = path.join(projectRoot, 'openspec', 'schemas', 'custom');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'), 'name: custom\nversion: 1\nartifacts: []');
+
+      const blueprints = listBlueprintSchemas(projectRoot);
+      expect(blueprints).toContain('reviewed');
+      expect(blueprints).not.toContain('custom');
+    });
+  });
+
+  describe('listAllSchemas', () => {
+    it('should include both schemas and blueprints', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'reviewed');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: reviewed\nversion: 1\nartifacts: []');
+
+      const schemaDir = path.join(projectRoot, 'openspec', 'schemas', 'custom');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'), 'name: custom\nversion: 1\nartifacts: []');
+
+      const all = listAllSchemas(projectRoot);
+      expect(all).toContain('reviewed');
+      expect(all).toContain('custom');
+      expect(all).toContain('spec-driven');
+    });
+
+    it('should deduplicate same-name schemas', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'shared');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'), 'name: shared\nversion: 1\nartifacts: []');
+
+      const schemaDir = path.join(projectRoot, 'openspec', 'schemas', 'shared');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'), 'name: shared\nversion: 2\nartifacts: []');
+
+      const all = listAllSchemas(projectRoot);
+      expect(all.filter(s => s === 'shared').length).toBe(1);
+    });
+  });
+
+  describe('listSchemasWithInfo with blueprints', () => {
+    it('should return correct source for blueprint schemas', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'reviewed');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'),
+        `name: reviewed\nversion: 1\ndescription: Expert-reviewed\nartifacts:\n  - id: spec\n    generates: spec.md\n    instruction: Create\n    description: Spec\n    template: spec.md\n`);
+
+      const schemas = listSchemasWithInfo(projectRoot);
+      const reviewed = schemas.find(s => s.name === 'reviewed');
+      expect(reviewed).toBeDefined();
+      expect(reviewed!.source).toBe('project-blueprint');
+    });
+
+    it('should shadow blueprint with same-name schema', () => {
+      const projectRoot = path.join(tempDir, 'project');
+      const bpDir = path.join(projectRoot, 'openspec', 'blueprints', 'schemas', 'flow');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'),
+        `name: flow-bp\nversion: 1\ndescription: Blueprint\nartifacts:\n  - id: a\n    generates: a.md\n    instruction: Create\n    description: A\n    template: a.md\n`);
+
+      const schemaDir = path.join(projectRoot, 'openspec', 'schemas', 'flow');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(path.join(schemaDir, 'schema.yaml'),
+        `name: flow-schema\nversion: 2\ndescription: Schema version\nartifacts:\n  - id: b\n    generates: b.md\n    instruction: Create\n    description: B\n    template: b.md\n`);
+
+      const schemas = listSchemasWithInfo(projectRoot);
+      const flow = schemas.find(s => s.name === 'flow');
+      expect(flow).toBeDefined();
+      expect(flow!.source).toBe('project');
+      expect(flow!.description).toBe('Schema version');
+    });
+
+    it('should show user-blueprint source', () => {
+      process.env.XDG_DATA_HOME = tempDir;
+      const bpDir = path.join(tempDir, 'openspec', 'blueprints', 'schemas', 'user-curated');
+      fs.mkdirSync(bpDir, { recursive: true });
+      fs.writeFileSync(path.join(bpDir, 'schema.yaml'),
+        `name: user-curated\nversion: 1\ndescription: User curated\nartifacts:\n  - id: x\n    generates: x.md\n    instruction: Create\n    description: X\n    template: x.md\n`);
+
+      const projectRoot = path.join(tempDir, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+
+      const schemas = listSchemasWithInfo(projectRoot);
+      const curated = schemas.find(s => s.name === 'user-curated');
+      expect(curated).toBeDefined();
+      expect(curated!.source).toBe('user-blueprint');
     });
   });
 });

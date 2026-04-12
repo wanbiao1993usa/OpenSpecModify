@@ -2,6 +2,7 @@
  * Micro Schema Resolver
  *
  * Discovers, loads, and validates micro schemas from openspec/micro/ directory.
+ * Supports blueprints subdivision at the project level.
  */
 
 import * as fs from 'node:fs';
@@ -15,6 +16,11 @@ export class MicroSchemaValidationError extends Error {
     this.name = 'MicroSchemaValidationError';
   }
 }
+
+/**
+ * Source indicating where a micro schema was resolved from.
+ */
+export type MicroSchemaSource = 'project' | 'project-blueprint';
 
 /**
  * Validates a micro schema name. Must be alphanumeric with hyphens/underscores, no path traversal.
@@ -32,16 +38,22 @@ export function validateMicroName(name: string): { valid: boolean; error?: strin
   return { valid: true };
 }
 
-/**
- * Gets the micro schemas directory path.
- */
+// ---------------------------------------------------------------------------
+// Directory path helpers
+// ---------------------------------------------------------------------------
+
 export function getMicroDir(projectRoot: string): string {
   return path.join(projectRoot, 'openspec', 'micro');
 }
 
-/**
- * Parses and validates a micro schema from YAML content.
- */
+export function getMicroBlueprintsDir(projectRoot: string): string {
+  return path.join(projectRoot, 'openspec', 'blueprints', 'micro');
+}
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
 export function parseMicroSchema(yamlContent: string): MicroSchema {
   const parsed = parseYaml(yamlContent);
 
@@ -60,8 +72,13 @@ export function parseMicroSchema(yamlContent: string): MicroSchema {
   return schema;
 }
 
+// ---------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------
+
 /**
- * Loads a micro schema by name from openspec/micro/<name>.yaml.
+ * Loads a micro schema by name.
+ * Resolution order: project micro → project blueprints micro.
  */
 export function loadMicroSchema(name: string, projectRoot: string): MicroSchema {
   const nameCheck = validateMicroName(name);
@@ -69,35 +86,89 @@ export function loadMicroSchema(name: string, projectRoot: string): MicroSchema 
     throw new MicroSchemaValidationError(`Invalid micro schema name '${name}': ${nameCheck.error}`);
   }
 
-  const microDir = getMicroDir(projectRoot);
-  const filePath = path.join(microDir, `${name}.yaml`);
-
-  if (!fs.existsSync(filePath)) {
-    const available = listMicroSchemas(projectRoot);
-    const availableStr = available.length > 0 ? available.join(', ') : '(none)';
-    throw new MicroSchemaValidationError(
-      `Micro schema '${name}' not found. Available: ${availableStr}`
-    );
+  // 1. Project micro
+  const projectPath = path.join(getMicroDir(projectRoot), `${name}.yaml`);
+  if (fs.existsSync(projectPath)) {
+    return parseMicroSchema(fs.readFileSync(projectPath, 'utf-8'));
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-  return parseMicroSchema(content);
+  // 2. Project blueprints micro
+  const blueprintPath = path.join(getMicroBlueprintsDir(projectRoot), `${name}.yaml`);
+  if (fs.existsSync(blueprintPath)) {
+    return parseMicroSchema(fs.readFileSync(blueprintPath, 'utf-8'));
+  }
+
+  const available = listAllMicroSchemas(projectRoot);
+  const availableStr = available.length > 0 ? available.join(', ') : '(none)';
+  throw new MicroSchemaValidationError(
+    `Micro schema '${name}' not found. Available: ${availableStr}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function scanMicroDir(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith('.yaml') && !f.startsWith('.'))
+    .map(f => f.replace(/\.yaml$/, ''));
+}
+
+// ---------------------------------------------------------------------------
+// Listing functions
+// ---------------------------------------------------------------------------
+
+export function listMicroSchemas(projectRoot: string): string[] {
+  return [...new Set(scanMicroDir(getMicroDir(projectRoot)))].sort();
+}
+
+export function listMicroBlueprints(projectRoot: string): string[] {
+  return [...new Set(scanMicroDir(getMicroBlueprintsDir(projectRoot)))].sort();
+}
+
+export function listAllMicroSchemas(projectRoot: string): string[] {
+  const all = new Set<string>();
+  for (const name of scanMicroDir(getMicroDir(projectRoot))) all.add(name);
+  for (const name of scanMicroDir(getMicroBlueprintsDir(projectRoot))) all.add(name);
+  return [...all].sort();
+}
+
+export interface MicroSchemaInfo {
+  name: string;
+  artifactCount: number;
+  source: MicroSchemaSource;
 }
 
 /**
- * Lists all available micro schema names.
+ * Lists all micro schemas with metadata.
+ * Project micro schemas shadow project blueprint schemas of the same name.
  */
-export function listMicroSchemas(projectRoot: string): string[] {
-  const microDir = getMicroDir(projectRoot);
+export function listMicroSchemasWithInfo(projectRoot: string): MicroSchemaInfo[] {
+  const results: MicroSchemaInfo[] = [];
+  const seenNames = new Set<string>();
 
-  if (!fs.existsSync(microDir)) {
-    return [];
+  const dirs: Array<{ dir: string; source: MicroSchemaSource }> = [
+    { dir: getMicroDir(projectRoot), source: 'project' },
+    { dir: getMicroBlueprintsDir(projectRoot), source: 'project-blueprint' },
+  ];
+
+  for (const { dir, source } of dirs) {
+    for (const name of scanMicroDir(dir)) {
+      if (seenNames.has(name)) continue;
+      try {
+        const filePath = path.join(dir, `${name}.yaml`);
+        const schema = parseMicroSchema(fs.readFileSync(filePath, 'utf-8'));
+        results.push({ name, artifactCount: schema.artifacts.length, source });
+        seenNames.add(name);
+      } catch {
+        // Skip invalid schemas
+      }
+    }
   }
 
-  return fs.readdirSync(microDir)
-    .filter(f => f.endsWith('.yaml') && !f.startsWith('.'))
-    .map(f => f.replace(/\.yaml$/, ''))
-    .sort();
+  return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ---------------------------------------------------------------------------

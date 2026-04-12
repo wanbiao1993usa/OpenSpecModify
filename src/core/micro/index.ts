@@ -11,9 +11,15 @@ export {
   parseMicroSchema,
   loadMicroSchema,
   listMicroSchemas,
+  listMicroBlueprints,
+  listAllMicroSchemas,
+  listMicroSchemasWithInfo,
   getMicroDir,
+  getMicroBlueprintsDir,
   MicroSchemaValidationError,
   validateMicroName,
+  type MicroSchemaSource,
+  type MicroSchemaInfo,
 } from './resolver.js';
 
 // Topological sort

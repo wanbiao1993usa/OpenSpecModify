@@ -24,8 +24,10 @@ import {
   formatMicroStatus,
   writeMicroComplete,
   resetMicroMeta,
+  microStep,
   type MicroStatus,
   type MicroArtifactStatus,
+  type StepDoneItem,
 } from '../core/micro/index.js';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,11 @@ export interface MicroResetOptions {
 }
 
 export interface MicroValidateOptions {
+  json?: boolean;
+}
+
+export interface MicroStepOptions {
+  done?: string;  // JSON string of StepDoneItem[]
   json?: boolean;
 }
 
@@ -456,5 +463,92 @@ export async function microValidateCommand(
       return;
     }
     throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// step (atomic complete-then-query)
+// ---------------------------------------------------------------------------
+
+export async function microStepCommand(
+  name: string,
+  options: MicroStepOptions
+): Promise<void> {
+  const projectRoot = getProjectRoot();
+
+  // Parse done array from JSON string
+  let done: StepDoneItem[] | undefined;
+  if (options.done) {
+    try {
+      const parsed = JSON.parse(options.done);
+      if (!Array.isArray(parsed)) {
+        throw new Error('--done must be a JSON array');
+      }
+      done = parsed as StepDoneItem[];
+      // Validate each item
+      for (const item of done) {
+        if (!item.artifact || typeof item.artifact !== 'string') {
+          throw new Error(`Each done item must have an "artifact" string field`);
+        }
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(`Invalid JSON for --done: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  const result = microStep({ name, projectRoot, done });
+
+  // JSON mode: output raw result
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // Human-readable output
+  const { progress } = result;
+  console.log(`Progress: ${progress.done} done, ${progress.ready} ready, ${progress.blocked} blocked, ${progress.stale} stale`);
+  console.log();
+
+  if (result.all_done) {
+    console.log(chalk.green('All artifacts are complete.'));
+    return;
+  }
+
+  if (result.stuck) {
+    console.log(chalk.red('Stuck — no artifacts are ready:'));
+    if (result.stuck.stale.length > 0) {
+      console.log(`  Stale: ${result.stuck.stale.join(', ')}`);
+    }
+    if (result.stuck.blocked.length > 0) {
+      console.log(`  Blocked: ${result.stuck.blocked.join(', ')}`);
+    }
+    return;
+  }
+
+  console.log(`Next (${result.next.length} ready):`);
+  console.log();
+  for (const item of result.next) {
+    console.log(`  ${chalk.bold(item.artifact)}${item.description ? ` — ${item.description}` : ''}`);
+    if (item.dependencies.length > 0) {
+      for (const dep of item.dependencies) {
+        const mark = dep.done ? chalk.green('✓') : chalk.red('✗');
+        let line = `    ${mark} ${dep.id}`;
+        if (dep.dialogLog) {
+          line += chalk.dim(` (dialog: ${dep.dialogLog.dialogLog})`);
+        }
+        console.log(line);
+      }
+    }
+    if (item.previousDialogLog) {
+      console.log(chalk.dim(`    Previous dialog: ${item.previousDialogLog.dialogLog}`));
+    }
+    console.log(`    Instruction: ${item.instruction}`);
+    if (item.unlocks.length > 0) {
+      console.log(`    Unlocks: ${item.unlocks.join(', ')}`);
+    }
+    console.log();
   }
 }

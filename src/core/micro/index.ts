@@ -51,3 +51,14 @@ export {
   type MicroArtifactStatus,
   type MicroStatus,
 } from './instruction-loader.js';
+
+// Step (atomic complete-then-query)
+export {
+  microStep,
+  type StepDoneItem,
+  type StepNextItem,
+  type StepStuck,
+  type StepProgress,
+  type MicroStepResult,
+  type MicroStepParams,
+} from './step.js';

@@ -46,6 +46,7 @@ import {
   microCompleteCommand,
   microResetCommand,
   microValidateCommand,
+  microStepCommand,
   type MicroListOptions,
   type MicroNewOptions,
   type MicroStatusOptions,
@@ -53,6 +54,7 @@ import {
   type MicroCompleteOptions,
   type MicroResetOptions,
   type MicroValidateOptions,
+  type MicroStepOptions,
 } from '../commands/micro.js';
 import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
@@ -707,6 +709,21 @@ microCmd
   .action(async (name: string, options: MicroValidateOptions) => {
     try {
       await microValidateCommand(name, options);
+    } catch (error) {
+      console.log();
+      ora().fail(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+microCmd
+  .command('step <name>')
+  .description('Atomic step: optionally complete artifacts, then return next ready batch')
+  .option('--done <json>', 'JSON array of done items: [{"artifact":"id","dialog_log":"path"},...]')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string, options: MicroStepOptions) => {
+    try {
+      await microStepCommand(name, options);
     } catch (error) {
       console.log();
       ora().fail(`Error: ${(error as Error).message}`);

@@ -24,6 +24,7 @@ import {
   formatMicroStatus,
   writeMicroComplete,
   resetMicroMeta,
+  resetMicroArtifact,
   microStep,
   type MicroStatus,
   type MicroArtifactStatus,
@@ -59,6 +60,7 @@ export interface MicroCompleteOptions {
 
 export interface MicroResetOptions {
   yes?: boolean;
+  artifact?: string;
 }
 
 export interface MicroValidateOptions {
@@ -390,10 +392,29 @@ export async function microResetCommand(
   const projectRoot = getProjectRoot();
 
   // Validate schema exists
-  loadMicroSchema(name, projectRoot);
+  const schema = loadMicroSchema(name, projectRoot);
 
+  // Single artifact reset
+  if (options.artifact) {
+    const artifact = schema.artifacts.find(a => a.id === options.artifact);
+    if (!artifact) {
+      const available = schema.artifacts.map(a => a.id);
+      throw new Error(
+        `Artifact '${options.artifact}' not found in micro schema '${name}'. Available: ${available.join(', ')}`
+      );
+    }
+
+    const removed = resetMicroArtifact(name, options.artifact, projectRoot);
+    if (removed) {
+      console.log(`Reset artifact '${options.artifact}' in micro schema '${name}'.`);
+    } else {
+      console.log(`Artifact '${options.artifact}' was not completed, nothing to reset.`);
+    }
+    return;
+  }
+
+  // Full reset
   if (!options.yes) {
-    // In non-interactive mode, just warn
     console.log(`Resetting all progress for micro schema '${name}'...`);
   }
 

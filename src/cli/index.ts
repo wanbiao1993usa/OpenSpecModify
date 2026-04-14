@@ -690,8 +690,9 @@ microCmd
 
 microCmd
   .command('reset <name>')
-  .description('Reset all progress for a micro schema')
+  .description('Reset progress for a micro schema (all or single artifact)')
   .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--artifact <id>', 'Reset a single artifact instead of all')
   .action(async (name: string, options: MicroResetOptions) => {
     try {
       await microResetCommand(name, options);

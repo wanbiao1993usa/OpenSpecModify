@@ -30,6 +30,7 @@ export {
   readMicroMeta,
   writeMicroComplete,
   resetMicroMeta,
+  resetMicroArtifact,
   detectMicroCompleted,
   detectMicroStale,
   type MicroArtifactMeta,

@@ -12,6 +12,7 @@ import {
   readMicroMeta,
   writeMicroComplete,
   resetMicroMeta,
+  resetMicroArtifact,
   detectMicroCompleted,
   detectMicroStale,
   type MicroMetaFile,
@@ -240,6 +241,72 @@ describe('resetMicroMeta', () => {
 
   it('does not throw when meta file does not exist', () => {
     expect(() => resetMicroMeta('nonexistent', tmpDir)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resetMicroArtifact
+// ---------------------------------------------------------------------------
+
+describe('resetMicroArtifact', () => {
+  it('removes a single artifact from meta', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': { completed_at: '2025-01-01T00:00:00' },
+        'step-2': { completed_at: '2025-01-02T00:00:00' },
+      },
+    });
+
+    const removed = resetMicroArtifact('test', 'step-1', tmpDir);
+    expect(removed).toBe(true);
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-1']).toBeUndefined();
+    expect(meta.artifacts['step-2']).toBeDefined();
+  });
+
+  it('returns false when artifact not in meta', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': { completed_at: '2025-01-01T00:00:00' },
+      },
+    });
+
+    const removed = resetMicroArtifact('test', 'nonexistent', tmpDir);
+    expect(removed).toBe(false);
+  });
+
+  it('deletes meta file when last artifact removed', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': { completed_at: '2025-01-01T00:00:00' },
+      },
+    });
+
+    const metaPath = path.join(getMicroDir(tmpDir), '.test.meta.yaml');
+    expect(fs.existsSync(metaPath)).toBe(true);
+
+    resetMicroArtifact('test', 'step-1', tmpDir);
+    expect(fs.existsSync(metaPath)).toBe(false);
+  });
+
+  it('returns false when meta file does not exist', () => {
+    const removed = resetMicroArtifact('nonexistent', 'step-1', tmpDir);
+    expect(removed).toBe(false);
+  });
+
+  it('preserves dialog_log of remaining artifacts', () => {
+    writeMetaFile('test', {
+      artifacts: {
+        'step-1': { completed_at: '2025-01-01T00:00:00', dialog_log: './logs/1.json' },
+        'step-2': { completed_at: '2025-01-02T00:00:00', dialog_log: './logs/2.json' },
+      },
+    });
+
+    resetMicroArtifact('test', 'step-1', tmpDir);
+
+    const meta = readMetaFile('test');
+    expect(meta.artifacts['step-2'].dialog_log).toBe('./logs/2.json');
   });
 });
 

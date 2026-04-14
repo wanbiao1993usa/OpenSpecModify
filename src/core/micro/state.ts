@@ -98,13 +98,43 @@ export function writeMicroComplete(
 }
 
 /**
- * Resets the micro run by deleting the meta file.
+ * Resets the entire micro run by deleting the meta file.
  */
 export function resetMicroMeta(name: string, projectRoot: string): void {
   const metaPath = getMetaPath(name, projectRoot);
   if (fs.existsSync(metaPath)) {
     fs.unlinkSync(metaPath);
   }
+}
+
+/**
+ * Resets a single artifact by removing its entry from the meta file.
+ * Returns true if the artifact was found and removed, false otherwise.
+ */
+export function resetMicroArtifact(
+  name: string,
+  artifactId: string,
+  projectRoot: string
+): boolean {
+  const metaPath = getMetaPath(name, projectRoot);
+  const existing = readMicroMeta(name, projectRoot);
+
+  if (!(artifactId in existing.artifacts)) {
+    return false;
+  }
+
+  delete existing.artifacts[artifactId];
+
+  // If no artifacts left, remove the file entirely
+  if (Object.keys(existing.artifacts).length === 0) {
+    if (fs.existsSync(metaPath)) {
+      fs.unlinkSync(metaPath);
+    }
+  } else {
+    fs.writeFileSync(metaPath, stringifyYaml(existing), 'utf-8');
+  }
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------

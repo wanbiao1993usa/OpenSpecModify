@@ -453,3 +453,49 @@ describe('microStep — full loop', () => {
     expect(result.all_done).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// preferred_mode in step result
+// ---------------------------------------------------------------------------
+
+describe('microStep — preferred_mode', () => {
+  it('defaults to main-agent when no preferred_mode set', () => {
+    writeMicroSchema('linear', linearSchema);
+
+    const result = microStep({ name: 'linear', projectRoot: tmpDir });
+    expect(result.next[0].mode).toBe('main-agent');
+  });
+
+  it('uses schema-level preferred_mode', () => {
+    writeMicroSchema('sub', {
+      name: 'sub',
+      version: 1,
+      preferred_mode: 'sub-agent',
+      artifacts: [
+        { id: 'a', instruction: 'Do A' },
+        { id: 'b', instruction: 'Do B', requires: ['a'] },
+      ],
+    });
+
+    const result = microStep({ name: 'sub', projectRoot: tmpDir });
+    expect(result.next[0].mode).toBe('sub-agent');
+  });
+
+  it('artifact-level overrides schema-level', () => {
+    writeMicroSchema('mixed', {
+      name: 'mixed',
+      version: 1,
+      preferred_mode: 'sub-agent',
+      artifacts: [
+        { id: 'a', instruction: 'Do A', preferred_mode: 'main-agent' },
+        { id: 'b', instruction: 'Do B' },
+      ],
+    });
+
+    const result = microStep({ name: 'mixed', projectRoot: tmpDir });
+    const aItem = result.next.find(n => n.artifact === 'a')!;
+    const bItem = result.next.find(n => n.artifact === 'b')!;
+    expect(aItem.mode).toBe('main-agent');  // artifact override
+    expect(bItem.mode).toBe('sub-agent');   // schema default
+  });
+});

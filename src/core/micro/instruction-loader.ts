@@ -8,7 +8,7 @@
 import { loadMicroSchema } from './resolver.js';
 import { readMicroMeta, detectMicroCompleted, detectMicroStale, type MicroMetaFile } from './state.js';
 import { topologicalSort } from './topo.js';
-import type { MicroSchema } from './types.js';
+import { resolveArtifactMode, type MicroSchema, type MicroMode } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +45,8 @@ export interface MicroInstructions {
   unlocks: string[];
   /** Previous dialog log for this artifact (if it was completed before) */
   previousDialogLog?: DialogLogRef;
+  /** Resolved execution mode (artifact-level > schema-level > default 'main-agent') */
+  mode: MicroMode;
 }
 
 export interface MicroDependencyInfo {
@@ -143,6 +145,7 @@ export function generateMicroInstructions(
     dependencies,
     unlocks,
     previousDialogLog,
+    mode: resolveArtifactMode(context.schema, artifact),
   };
 }
 

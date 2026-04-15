@@ -22,7 +22,7 @@ import {
   type DialogLogRef,
   type MicroDependencyInfo,
 } from './instruction-loader.js';
-import type { MicroSchema } from './types.js';
+import { resolveArtifactMode, type MicroSchema, type MicroMode } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +42,7 @@ export interface StepNextItem {
   dependencies: MicroDependencyInfo[];
   unlocks: string[];
   previousDialogLog?: DialogLogRef;
+  mode: MicroMode;
 }
 
 /** Stuck information when no artifacts are ready but not all done. */
@@ -129,8 +130,10 @@ export function microStep(params: MicroStepParams): MicroStepResult {
   }
 
   // 5. Build next array with full instructions
+  const artifactMap = new Map(schema.artifacts.map(a => [a.id, a]));
   const next: StepNextItem[] = readyIds.map(id => {
     const inst = generateMicroInstructions(context, id);
+    const artifact = artifactMap.get(id)!;
     return {
       artifact: inst.artifactId,
       instruction: inst.instruction,
@@ -138,6 +141,7 @@ export function microStep(params: MicroStepParams): MicroStepResult {
       dependencies: inst.dependencies,
       unlocks: inst.unlocks,
       previousDialogLog: inst.previousDialogLog,
+      mode: resolveArtifactMode(schema, artifact),
     };
   });
 

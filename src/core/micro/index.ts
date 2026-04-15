@@ -2,8 +2,11 @@
 export {
   MicroArtifactSchema,
   MicroSchemaYaml,
+  MicroModeSchema,
+  resolveArtifactMode,
   type MicroArtifact,
   type MicroSchema,
+  type MicroMode,
 } from './types.js';
 
 // Schema resolution
